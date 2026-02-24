@@ -1,0 +1,313 @@
+Phase 1: Collecting agency URLs from all pages...
+  Page 1: found 16 listings (16 new) | Total so far: 16
+  Page 2: found 16 listings (16 new) | Total so far: 32
+  Page 3: found 16 listings (16 new) | Total so far: 48
+  Page 4: found 16 listings (16 new) | Total so far: 64
+  Page 5: found 16 listings (16 new) | Total so far: 80
+  Page 6: found 16 listings (16 new) | Total so far: 96
+  Page 7: found 16 listings (16 new) | Total so far: 112
+  Page 8: found 16 listings (16 new) | Total so far: 128
+  Page 9: found 16 listings (16 new) | Total so far: 144
+  Page 10: found 16 listings (16 new) | Total so far: 160
+  Page 11: found 16 listings (16 new) | Total so far: 176
+  Page 12: found 16 listings (16 new) | Total so far: 192
+  Page 13: found 16 listings (16 new) | Total so far: 208
+  Page 14: found 16 listings (16 new) | Total so far: 224
+  Page 15: found 16 listings (16 new) | Total so far: 240
+  Page 16: found 16 listings (16 new) | Total so far: 256
+  Page 17: found 16 listings (16 new) | Total so far: 272
+  Page 18: found 16 listings (16 new) | Total so far: 288
+  Page 19: found 16 listings (16 new) | Total so far: 304
+  Page 20: found 16 listings (16 new) | Total so far: 320
+  Page 21: found 16 listings (16 new) | Total so far: 336
+  Page 22: found 16 listings (16 new) | Total so far: 352
+  Page 23: found 16 listings (16 new) | Total so far: 368
+  Page 24: found 16 listings (16 new) | Total so far: 384
+  Page 25: found 16 listings (16 new) | Total so far: 400
+  Page 26: found 16 listings (16 new) | Total so far: 416
+  Page 27: found 16 listings (16 new) | Total so far: 432
+  Page 28: found 16 listings (16 new) | Total so far: 448
+  Page 29: found 16 listings (16 new) | Total so far: 464
+  Page 30: found 16 listings (16 new) | Total so far: 480
+  Page 31: found 16 listings (16 new) | Total so far: 496
+  Page 32: found 16 listings (16 new) | Total so far: 512
+  Page 33: found 16 listings (16 new) | Total so far: 528
+  Page 34: found 16 listings (16 new) | Total so far: 544
+  Page 35: found 16 listings (16 new) | Total so far: 560
+  Page 36: found 16 listings (16 new) | Total so far: 576
+  Page 37: found 16 listings (16 new) | Total so far: 592
+  Page 38: found 16 listings (16 new) | Total so far: 608
+  Page 39: found 16 listings (16 new) | Total so far: 624
+  Page 40: found 16 listings (16 new) | Total so far: 640
+  Page 41: found 16 listings (16 new) | Total so far: 656
+  Page 42: found 16 listings (16 new) | Total so far: 672
+  Page 43: found 16 listings (16 new) | Total so far: 688
+  Page 44: found 16 listings (16 new) | Total so far: 704
+  Page 45: found 16 listings (16 new) | Total so far: 720
+  Page 46: found 16 listings (16 new) | Total so far: 736
+  Page 47: found 16 listings (16 new) | Total so far: 752
+  Page 48: found 16 listings (16 new) | Total so far: 768
+  Page 49: found 16 listings (16 new) | Total so far: 784
+  Page 50: found 16 listings (16 new) | Total so far: 800
+  Page 51: found 16 listings (16 new) | Total so far: 816
+  Page 52: found 16 listings (16 new) | Total so far: 832
+  Page 53: found 16 listings (16 new) | Total so far: 848
+  Page 54: found 16 listings (16 new) | Total so far: 864
+  Page 55: found 16 listings (16 new) | Total so far: 880
+  Page 56: found 16 listings (16 new) | Total so far: 896
+  Page 57: found 16 listings (16 new) | Total so far: 912
+  Page 58: found 16 listings (16 new) | Total so far: 928
+  Page 59: found 16 listings (16 new) | Total so far: 944
+  Page 60: found 16 listings (16 new) | Total so far: 960
+  Page 61: found 16 listings (16 new) | Total so far: 976
+  Page 62: found 16 listings (16 new) | Total so far: 992
+  Page 63: found 16 listings (16 new) | Total so far: 1008
+  Page 64: found 16 listings (16 new) | Total so far: 1024
+  Page 65: found 16 listings (16 new) | Total so far: 1040
+  Page 66: found 16 listings (16 new) | Total so far: 1056
+  Page 67: found 16 listings (16 new) | Total so far: 1072
+  Page 68: found 16 listings (16 new) | Total so far: 1088
+  Page 69: found 16 listings (16 new) | Total so far: 1104
+  Page 70: found 16 listings (16 new) | Total so far: 1120
+  Page 71: found 16 listings (16 new) | Total so far: 1136
+  Page 72: found 16 listings (16 new) | Total so far: 1152
+  Page 73: found 3 listings (3 new) | Total so far: 1155
+  No more pages.
+
+Phase 1 complete: 1155 unique agency URLs found.
+
+Phase 2: Scraping agency detail pages...
+Running batch 1/116: 10 tasks
+Finished batch 1 | Scraped so far: 10
+Running batch 2/116: 10 tasks
+Finished batch 2 | Scraped so far: 20
+Running batch 3/116: 10 tasks
+Finished batch 3 | Scraped so far: 30
+Running batch 4/116: 10 tasks
+Finished batch 4 | Scraped so far: 40
+Running batch 5/116: 10 tasks
+Finished batch 5 | Scraped so far: 50
+Running batch 6/116: 10 tasks
+Finished batch 6 | Scraped so far: 60
+Running batch 7/116: 10 tasks
+Finished batch 7 | Scraped so far: 70
+Running batch 8/116: 10 tasks
+Finished batch 8 | Scraped so far: 80
+Running batch 9/116: 10 tasks
+Finished batch 9 | Scraped so far: 90
+Running batch 10/116: 10 tasks
+Finished batch 10 | Scraped so far: 100
+Running batch 11/116: 10 tasks
+Finished batch 11 | Scraped so far: 110
+Running batch 12/116: 10 tasks
+Finished batch 12 | Scraped so far: 120
+Running batch 13/116: 10 tasks
+Finished batch 13 | Scraped so far: 130
+Running batch 14/116: 10 tasks
+Finished batch 14 | Scraped so far: 140
+Running batch 15/116: 10 tasks
+Finished batch 15 | Scraped so far: 150
+Running batch 16/116: 10 tasks
+Finished batch 16 | Scraped so far: 160
+Running batch 17/116: 10 tasks
+Finished batch 17 | Scraped so far: 170
+Running batch 18/116: 10 tasks
+Finished batch 18 | Scraped so far: 180
+Running batch 19/116: 10 tasks
+Finished batch 19 | Scraped so far: 190
+Running batch 20/116: 10 tasks
+Finished batch 20 | Scraped so far: 200
+Running batch 21/116: 10 tasks
+Finished batch 21 | Scraped so far: 210
+Running batch 22/116: 10 tasks
+Finished batch 22 | Scraped so far: 220
+Running batch 23/116: 10 tasks
+Finished batch 23 | Scraped so far: 230
+Running batch 24/116: 10 tasks
+Finished batch 24 | Scraped so far: 240
+Running batch 25/116: 10 tasks
+Finished batch 25 | Scraped so far: 250
+Running batch 26/116: 10 tasks
+Finished batch 26 | Scraped so far: 260
+Running batch 27/116: 10 tasks
+Finished batch 27 | Scraped so far: 270
+Running batch 28/116: 10 tasks
+Finished batch 28 | Scraped so far: 280
+Running batch 29/116: 10 tasks
+Finished batch 29 | Scraped so far: 290
+Running batch 30/116: 10 tasks
+Finished batch 30 | Scraped so far: 300
+Running batch 31/116: 10 tasks
+Finished batch 31 | Scraped so far: 310
+Running batch 32/116: 10 tasks
+Finished batch 32 | Scraped so far: 320
+Running batch 33/116: 10 tasks
+Finished batch 33 | Scraped so far: 330
+Running batch 34/116: 10 tasks
+Finished batch 34 | Scraped so far: 340
+Running batch 35/116: 10 tasks
+Finished batch 35 | Scraped so far: 350
+Running batch 36/116: 10 tasks
+Finished batch 36 | Scraped so far: 360
+Running batch 37/116: 10 tasks
+Finished batch 37 | Scraped so far: 370
+Running batch 38/116: 10 tasks
+Finished batch 38 | Scraped so far: 380
+Running batch 39/116: 10 tasks
+Finished batch 39 | Scraped so far: 390
+Running batch 40/116: 10 tasks
+Finished batch 40 | Scraped so far: 400
+Running batch 41/116: 10 tasks
+Finished batch 41 | Scraped so far: 410
+Running batch 42/116: 10 tasks
+Finished batch 42 | Scraped so far: 420
+Running batch 43/116: 10 tasks
+Finished batch 43 | Scraped so far: 430
+Running batch 44/116: 10 tasks
+Finished batch 44 | Scraped so far: 440
+Running batch 45/116: 10 tasks
+Finished batch 45 | Scraped so far: 450
+Running batch 46/116: 10 tasks
+Finished batch 46 | Scraped so far: 460
+Running batch 47/116: 10 tasks
+Finished batch 47 | Scraped so far: 470
+Running batch 48/116: 10 tasks
+Finished batch 48 | Scraped so far: 480
+Running batch 49/116: 10 tasks
+Finished batch 49 | Scraped so far: 490
+Running batch 50/116: 10 tasks
+Finished batch 50 | Scraped so far: 500
+Running batch 51/116: 10 tasks
+Finished batch 51 | Scraped so far: 510
+Running batch 52/116: 10 tasks
+Finished batch 52 | Scraped so far: 520
+Running batch 53/116: 10 tasks
+Finished batch 53 | Scraped so far: 530
+Running batch 54/116: 10 tasks
+Finished batch 54 | Scraped so far: 540
+Running batch 55/116: 10 tasks
+Finished batch 55 | Scraped so far: 550
+Running batch 56/116: 10 tasks
+Finished batch 56 | Scraped so far: 560
+Running batch 57/116: 10 tasks
+Finished batch 57 | Scraped so far: 570
+Running batch 58/116: 10 tasks
+Finished batch 58 | Scraped so far: 580
+Running batch 59/116: 10 tasks
+Finished batch 59 | Scraped so far: 590
+Running batch 60/116: 10 tasks
+Finished batch 60 | Scraped so far: 600
+Running batch 61/116: 10 tasks
+Finished batch 61 | Scraped so far: 610
+Running batch 62/116: 10 tasks
+Finished batch 62 | Scraped so far: 620
+Running batch 63/116: 10 tasks
+Finished batch 63 | Scraped so far: 630
+Running batch 64/116: 10 tasks
+Finished batch 64 | Scraped so far: 640
+Running batch 65/116: 10 tasks
+Finished batch 65 | Scraped so far: 650
+Running batch 66/116: 10 tasks
+Finished batch 66 | Scraped so far: 660
+Running batch 67/116: 10 tasks
+Finished batch 67 | Scraped so far: 670
+Running batch 68/116: 10 tasks
+Finished batch 68 | Scraped so far: 680
+Running batch 69/116: 10 tasks
+Finished batch 69 | Scraped so far: 690
+Running batch 70/116: 10 tasks
+Finished batch 70 | Scraped so far: 700
+Running batch 71/116: 10 tasks
+Finished batch 71 | Scraped so far: 710
+Running batch 72/116: 10 tasks
+Finished batch 72 | Scraped so far: 720
+Running batch 73/116: 10 tasks
+Finished batch 73 | Scraped so far: 730
+Running batch 74/116: 10 tasks
+Finished batch 74 | Scraped so far: 740
+Running batch 75/116: 10 tasks
+Finished batch 75 | Scraped so far: 750
+Running batch 76/116: 10 tasks
+Finished batch 76 | Scraped so far: 760
+Running batch 77/116: 10 tasks
+Finished batch 77 | Scraped so far: 770
+Running batch 78/116: 10 tasks
+Finished batch 78 | Scraped so far: 780
+Running batch 79/116: 10 tasks
+Finished batch 79 | Scraped so far: 790
+Running batch 80/116: 10 tasks
+Finished batch 80 | Scraped so far: 800
+Running batch 81/116: 10 tasks
+Finished batch 81 | Scraped so far: 810
+Running batch 82/116: 10 tasks
+Finished batch 82 | Scraped so far: 820
+Running batch 83/116: 10 tasks
+Finished batch 83 | Scraped so far: 830
+Running batch 84/116: 10 tasks
+Finished batch 84 | Scraped so far: 840
+Running batch 85/116: 10 tasks
+Finished batch 85 | Scraped so far: 850
+Running batch 86/116: 10 tasks
+Finished batch 86 | Scraped so far: 860
+Running batch 87/116: 10 tasks
+Finished batch 87 | Scraped so far: 870
+Running batch 88/116: 10 tasks
+Finished batch 88 | Scraped so far: 880
+Running batch 89/116: 10 tasks
+Finished batch 89 | Scraped so far: 890
+Running batch 90/116: 10 tasks
+Finished batch 90 | Scraped so far: 900
+Running batch 91/116: 10 tasks
+Finished batch 91 | Scraped so far: 910
+Running batch 92/116: 10 tasks
+Finished batch 92 | Scraped so far: 920
+Running batch 93/116: 10 tasks
+Finished batch 93 | Scraped so far: 930
+Running batch 94/116: 10 tasks
+Finished batch 94 | Scraped so far: 940
+Running batch 95/116: 10 tasks
+Finished batch 95 | Scraped so far: 950
+Running batch 96/116: 10 tasks
+Finished batch 96 | Scraped so far: 960
+Running batch 97/116: 10 tasks
+Finished batch 97 | Scraped so far: 970
+Running batch 98/116: 10 tasks
+Finished batch 98 | Scraped so far: 980
+Running batch 99/116: 10 tasks
+Finished batch 99 | Scraped so far: 990
+Running batch 100/116: 10 tasks
+Finished batch 100 | Scraped so far: 1000
+Running batch 101/116: 10 tasks
+Finished batch 101 | Scraped so far: 1010
+Running batch 102/116: 10 tasks
+Finished batch 102 | Scraped so far: 1020
+Running batch 103/116: 10 tasks
+Finished batch 103 | Scraped so far: 1030
+Running batch 104/116: 10 tasks
+Finished batch 104 | Scraped so far: 1040
+Running batch 105/116: 10 tasks
+Finished batch 105 | Scraped so far: 1050
+Running batch 106/116: 10 tasks
+Finished batch 106 | Scraped so far: 1060
+Running batch 107/116: 10 tasks
+Finished batch 107 | Scraped so far: 1070
+Running batch 108/116: 10 tasks
+Finished batch 108 | Scraped so far: 1080
+Running batch 109/116: 10 tasks
+Finished batch 109 | Scraped so far: 1090
+Running batch 110/116: 10 tasks
+Finished batch 110 | Scraped so far: 1100
+Running batch 111/116: 10 tasks
+Finished batch 111 | Scraped so far: 1110
+Running batch 112/116: 10 tasks
+Finished batch 112 | Scraped so far: 1120
+Running batch 113/116: 10 tasks
+Finished batch 113 | Scraped so far: 1130
+Running batch 114/116: 10 tasks
+Finished batch 114 | Scraped so far: 1140
+Running batch 115/116: 10 tasks
+Finished batch 115 | Scraped so far: 1150
+Running batch 116/116: 5 tasks
+Finished batch 116 | Scraped so far: 1155
+
+Done! Data saved to /home/user/shopify-crawler/data.csv
