@@ -35,7 +35,7 @@ class Shopify:
     def __init__(self) -> None:
         self.scraper =  Scraper()
         self.base_url = "https://www.shopify.com"
-        self.page_url = "https://www.shopify.com/in/partners/directory/services"
+        self.page_url = "https://www.shopify.com/partners/directory/services?minPrice=&maxPrice=&locationCodes=loc-us&sort=DEFAULT"
         self.headers  = {
                         "Accept":"text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/png,image/svg+xml,*/*;q=0.8",
                          "Accept-Language":"en-US,en;q=0.5",
@@ -118,23 +118,30 @@ class Shopify:
         if page == 1:
             url = self.page_url
         else:
-            url = self.page_url + f"?page={page}"
+            url = self.page_url + f"&page={page}"
         soup = await self.scraper.get_soup(url, headers=self.headers)
         if not soup:
             print(f"Error getting {url}")
-            return None
+            return None, False
         urls = soup.select('[data-component-name="listing-profile-card"] a[href]')
-        return [self.base_url + url.get('href') for url in urls]
+        next_page = soup.find(attrs={'data-component-name': 'next-page'})
+        has_next = next_page is not None and next_page.get('aria-disabled') != 'true'
+        return [self.base_url + url.get('href') for url in urls], has_next
     
     async def main(self):
         index = 1
         while True:
-            
-            urls = await self.get_page_urls(index)
+            urls, has_next = await self.get_page_urls(index)
+            if not urls:
+                print(f"No urls found on page {index}, stopping.")
+                break
             print(f"Getting urls for page {index} with {len(urls)} urls")
             tasks = [self.url_handler(url) for url in urls]
             results = await run_in_batches(tasks, max_concurrent_tasks=15)
             print(f"Finished getting urls for page {index}")
+            if not has_next:
+                print("No more pages, done.")
+                break
             index += 1
     
 if __name__ == "__main__":

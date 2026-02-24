@@ -24,7 +24,7 @@ class Scraper:
         :param requests_per_second: Maximum number of requests allowed per second.
         """
         
-        self.session = AsyncClient()
+        self.session = AsyncClient(follow_redirects=True)
         self.timeout = timeout
         self.requests_per_second = requests_per_second
         self.proxy_usage_limit = proxy_usage_limit
