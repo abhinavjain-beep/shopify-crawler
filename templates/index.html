@@ -1,0 +1,635 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>US Freelancer Explorer</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css"/>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css"/>
+  <style>
+    :root {
+      --brand: #4f46e5;
+      --brand-light: #eef2ff;
+      --card-radius: 12px;
+    }
+    body { background: #f8f9fc; font-family: 'Segoe UI', system-ui, sans-serif; color: #1e293b; }
+
+    /* ── top bar ── */
+    .topbar {
+      background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%);
+      color: #fff;
+      padding: 18px 32px;
+      display: flex; align-items: center; justify-content: space-between;
+      box-shadow: 0 2px 12px rgba(79,70,229,.35);
+    }
+    .topbar h1 { font-size: 1.45rem; font-weight: 700; margin: 0; letter-spacing: -.3px; }
+    .topbar .badge-total { background: rgba(255,255,255,.25); padding: 5px 14px;
+      border-radius: 20px; font-size: .85rem; font-weight: 600; }
+
+    /* ── stat cards ── */
+    .stat-card {
+      background: #fff;
+      border-radius: var(--card-radius);
+      padding: 18px 22px;
+      border-left: 4px solid var(--brand);
+      box-shadow: 0 1px 8px rgba(0,0,0,.07);
+      transition: transform .15s;
+    }
+    .stat-card:hover { transform: translateY(-2px); }
+    .stat-card .num { font-size: 2rem; font-weight: 800; color: var(--brand); }
+    .stat-card .lbl { font-size: .78rem; color: #64748b; text-transform: uppercase;
+      letter-spacing: .05em; margin-top: 2px; }
+    .stat-card.green  { border-color: #10b981; } .stat-card.green  .num { color: #10b981; }
+    .stat-card.orange { border-color: #f59e0b; } .stat-card.orange .num { color: #f59e0b; }
+    .stat-card.rose   { border-color: #f43f5e; } .stat-card.rose   .num { color: #f43f5e; }
+
+    /* ── filter panel ── */
+    .filter-panel {
+      background: #fff;
+      border-radius: var(--card-radius);
+      padding: 20px 24px;
+      box-shadow: 0 1px 8px rgba(0,0,0,.07);
+    }
+    .filter-panel label { font-size: .82rem; font-weight: 600; color: #475569;
+      text-transform: uppercase; letter-spacing: .04em; }
+    .form-control, .form-select {
+      border-radius: 8px; border-color: #e2e8f0; font-size: .9rem;
+      padding: 8px 12px;
+    }
+    .form-control:focus, .form-select:focus { border-color: var(--brand);
+      box-shadow: 0 0 0 3px rgba(79,70,229,.15); }
+    .btn-filter {
+      background: var(--brand); color: #fff; border: none;
+      border-radius: 8px; padding: 9px 20px; font-weight: 600;
+      transition: background .15s;
+    }
+    .btn-filter:hover { background: #4338ca; color: #fff; }
+    .btn-reset { background: #f1f5f9; color: #475569; border: none;
+      border-radius: 8px; padding: 9px 16px; font-weight: 600; }
+    .btn-reset:hover { background: #e2e8f0; }
+    .btn-export { background: #10b981; color: #fff; border: none;
+      border-radius: 8px; padding: 9px 20px; font-weight: 600; }
+    .btn-export:hover { background: #059669; color: #fff; }
+
+    /* ── results panel ── */
+    .results-panel {
+      background: #fff;
+      border-radius: var(--card-radius);
+      box-shadow: 0 1px 8px rgba(0,0,0,.07);
+      overflow: hidden;
+    }
+    .results-header {
+      padding: 14px 22px;
+      border-bottom: 1px solid #f1f5f9;
+      display: flex; align-items: center; justify-content: space-between;
+      background: #fafbff;
+    }
+    .results-header .count { font-size: .9rem; color: #64748b; }
+    .results-header .count strong { color: var(--brand); }
+
+    /* ── table ── */
+    .table { margin: 0; font-size: .875rem; }
+    .table thead th {
+      background: #f8f9fc; color: #475569; font-weight: 700;
+      font-size: .78rem; text-transform: uppercase; letter-spacing: .04em;
+      border-bottom: 2px solid #e2e8f0; padding: 11px 14px;
+      white-space: nowrap; cursor: pointer; user-select: none;
+    }
+    .table thead th:hover { background: var(--brand-light); color: var(--brand); }
+    .table thead th.sorted { color: var(--brand); }
+    .table thead th .sort-icon { opacity: .4; }
+    .table thead th.sorted .sort-icon { opacity: 1; }
+    .table tbody td { padding: 11px 14px; vertical-align: middle;
+      border-color: #f1f5f9; }
+    .table tbody tr:hover { background: #fafbff; }
+
+    /* cells */
+    .name-cell a { font-weight: 600; color: #1e293b; text-decoration: none; }
+    .name-cell a:hover { color: var(--brand); text-decoration: underline; }
+    .name-cell small { color: #94a3b8; font-size: .78rem; display: block; margin-top: 2px; }
+
+    .badge-cat {
+      font-size: .72rem; font-weight: 600; padding: 3px 9px; border-radius: 20px;
+      white-space: nowrap;
+    }
+    .cat-web  { background: #eef2ff; color: #4f46e5; }
+    .cat-mkt  { background: #fef3c7; color: #92400e; }
+    .cat-full { background: #d1fae5; color: #065f46; }
+
+    .rate-badge { font-weight: 700; color: #10b981; }
+    .feedback-badge { font-size: .8rem; color: #f59e0b; font-weight: 700; }
+
+    .skill-tags { display: flex; flex-wrap: wrap; gap: 4px; max-width: 260px; }
+    .skill-tag {
+      background: #f1f5f9; color: #475569; font-size: .72rem;
+      padding: 2px 8px; border-radius: 12px; white-space: nowrap;
+    }
+
+    /* bio truncate */
+    .bio-cell { max-width: 240px; }
+    .bio-text { display: -webkit-box; -webkit-line-clamp: 2;
+      -webkit-box-orient: vertical; overflow: hidden;
+      color: #64748b; font-size: .83rem; }
+
+    /* ── pagination ── */
+    .pagination .page-link { border-radius: 7px !important; margin: 0 2px;
+      color: var(--brand); border-color: #e2e8f0; font-size: .875rem; }
+    .pagination .page-item.active .page-link {
+      background: var(--brand); border-color: var(--brand); color: #fff; }
+    .pagination .page-link:hover { background: var(--brand-light); }
+
+    /* ── loading overlay ── */
+    #loading { display: none; position: fixed; inset: 0;
+      background: rgba(255,255,255,.6); z-index: 9999;
+      align-items: center; justify-content: center; }
+    #loading.active { display: flex; }
+    .spinner { width: 48px; height: 48px; border: 4px solid #e2e8f0;
+      border-top-color: var(--brand); border-radius: 50%;
+      animation: spin .7s linear infinite; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* ── detail modal ── */
+    .modal-header { background: linear-gradient(135deg, #4f46e5, #7c3aed);
+      color: #fff; border-radius: 12px 12px 0 0; }
+    .modal-header .btn-close { filter: invert(1); }
+    .detail-row { display: flex; gap: 10px; margin-bottom: 10px; }
+    .detail-row .lbl { min-width: 130px; font-weight: 600; font-size: .85rem; color: #64748b; }
+    .detail-row .val { font-size: .9rem; color: #1e293b; flex: 1; }
+    .detail-bio { background: #f8f9fc; border-radius: 8px; padding: 12px;
+      font-size: .875rem; color: #475569; line-height: 1.6; }
+
+    /* ── per-page selector ── */
+    .per-page-select { width: auto; display: inline-block; }
+
+    /* ── range display ── */
+    .range-vals { font-size: .82rem; color: var(--brand); font-weight: 700; margin-top: 4px; }
+  </style>
+</head>
+<body>
+
+<!-- Top Bar -->
+<div class="topbar">
+  <div class="d-flex align-items-center gap-3">
+    <i class="bi bi-people-fill fs-4"></i>
+    <h1>US Freelancer Explorer</h1>
+  </div>
+  <span class="badge-total"><i class="bi bi-database-fill me-1"></i>{{ stats.total }} freelancers</span>
+</div>
+
+<!-- Loading spinner -->
+<div id="loading"><div class="spinner"></div></div>
+
+<div class="container-fluid px-4 py-4">
+
+  <!-- Stat Cards -->
+  <div class="row g-3 mb-4">
+    <div class="col-6 col-md-3 col-xl">
+      <div class="stat-card">
+        <div class="num" id="stat-total">{{ stats.total }}</div>
+        <div class="lbl"><i class="bi bi-people me-1"></i>Total Found</div>
+      </div>
+    </div>
+    <div class="col-6 col-md-3 col-xl">
+      <div class="stat-card green">
+        <div class="num" id="stat-web">{{ stats.web_dev }}</div>
+        <div class="lbl"><i class="bi bi-code-slash me-1"></i>Web Dev</div>
+      </div>
+    </div>
+    <div class="col-6 col-md-3 col-xl">
+      <div class="stat-card orange">
+        <div class="num" id="stat-mkt">{{ stats.perf_mktg }}</div>
+        <div class="lbl"><i class="bi bi-graph-up-arrow me-1"></i>Perf. Marketing</div>
+      </div>
+    </div>
+    <div class="col-6 col-md-3 col-xl">
+      <div class="stat-card rose">
+        <div class="num" id="stat-full">{{ stats.fullstack }}</div>
+        <div class="lbl"><i class="bi bi-layers me-1"></i>Full Stack</div>
+      </div>
+    </div>
+    <div class="col-6 col-md-3 col-xl">
+      <div class="stat-card" style="border-color:#8b5cf6">
+        <div class="num" style="color:#8b5cf6" id="stat-median">—</div>
+        <div class="lbl"><i class="bi bi-currency-dollar me-1"></i>Median Rate/hr</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="row g-4">
+
+    <!-- Filter Sidebar -->
+    <div class="col-12 col-xl-3">
+      <div class="filter-panel">
+        <h6 class="fw-bold mb-3 d-flex align-items-center gap-2">
+          <i class="bi bi-funnel-fill text-primary"></i> Filters
+        </h6>
+
+        <!-- Search -->
+        <div class="mb-3">
+          <label class="mb-1">Search</label>
+          <div class="input-group">
+            <span class="input-group-text bg-white border-end-0 pe-1">
+              <i class="bi bi-search text-muted"></i>
+            </span>
+            <input type="text" id="q" class="form-control border-start-0 ps-1"
+              placeholder="Name, title, skill…"/>
+          </div>
+        </div>
+
+        <!-- Category -->
+        <div class="mb-3">
+          <label class="mb-1">Category</label>
+          <select id="category" class="form-select">
+            <option value="">All Categories</option>
+            {% for cat in categories %}
+            <option value="{{ cat }}">{{ cat }}</option>
+            {% endfor %}
+          </select>
+        </div>
+
+        <!-- State -->
+        <div class="mb-3">
+          <label class="mb-1">US State</label>
+          <select id="state" class="form-select">
+            <option value="">All States</option>
+            {% for s in states %}
+            <option value="{{ s }}">{{ s }}</option>
+            {% endfor %}
+          </select>
+        </div>
+
+        <!-- Rate Range -->
+        <div class="mb-3">
+          <label class="mb-1">Hourly Rate ($)</label>
+          <div class="d-flex gap-2">
+            <input type="number" id="rate_min" class="form-control" placeholder="Min"
+              min="{{ rate_min }}" max="{{ rate_max }}" value="{{ rate_min }}"/>
+            <input type="number" id="rate_max" class="form-control" placeholder="Max"
+              min="{{ rate_min }}" max="{{ rate_max }}" value="{{ rate_max }}"/>
+          </div>
+          <div class="range-vals mt-1" id="rate-display">
+            ${{ rate_min }} – ${{ rate_max }}
+          </div>
+        </div>
+
+        <!-- Feedback only -->
+        <div class="mb-4">
+          <div class="form-check">
+            <input class="form-check-input" type="checkbox" id="feedback" value="yes"/>
+            <label class="form-check-label" for="feedback" style="font-size:.9rem">
+              Has Feedback Score Only
+            </label>
+          </div>
+        </div>
+
+        <div class="d-grid gap-2">
+          <button class="btn btn-filter" onclick="applyFilters()">
+            <i class="bi bi-search me-1"></i> Apply Filters
+          </button>
+          <button class="btn btn-reset" onclick="resetFilters()">
+            <i class="bi bi-arrow-counterclockwise me-1"></i> Reset
+          </button>
+          <button class="btn btn-export" onclick="exportCSV()">
+            <i class="bi bi-download me-1"></i> Export CSV
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Results Panel -->
+    <div class="col-12 col-xl-9">
+      <div class="results-panel">
+
+        <!-- Results header -->
+        <div class="results-header">
+          <div class="count">
+            Showing <strong id="count-shown">—</strong> of
+            <strong id="count-total">—</strong> freelancers
+          </div>
+          <div class="d-flex align-items-center gap-2">
+            <span class="text-muted" style="font-size:.82rem">Per page:</span>
+            <select id="per-page" class="form-select form-select-sm per-page-select"
+              onchange="currentPage=1; fetchData()">
+              <option value="10">10</option>
+              <option value="25" selected>25</option>
+              <option value="50">50</option>
+              <option value="100">100</option>
+            </select>
+          </div>
+        </div>
+
+        <!-- Table -->
+        <div class="table-responsive">
+          <table class="table table-hover align-middle" id="main-table">
+            <thead>
+              <tr>
+                <th onclick="sortBy('Name')" data-col="Name">
+                  Freelancer <i class="bi bi-arrow-down-up sort-icon"></i>
+                </th>
+                <th onclick="sortBy('Category')" data-col="Category">
+                  Category <i class="bi bi-arrow-down-up sort-icon"></i>
+                </th>
+                <th onclick="sortBy('Location')" data-col="Location">
+                  Location <i class="bi bi-arrow-down-up sort-icon"></i>
+                </th>
+                <th onclick="sortBy('Rate_Num')" data-col="Rate_Num">
+                  Rate/hr <i class="bi bi-arrow-down-up sort-icon"></i>
+                </th>
+                <th onclick="sortBy('Feedback')" data-col="Feedback">
+                  Feedback <i class="bi bi-arrow-down-up sort-icon"></i>
+                </th>
+                <th>Skills</th>
+                <th>Bio</th>
+              </tr>
+            </thead>
+            <tbody id="table-body">
+              <tr><td colspan="7" class="text-center text-muted py-5">
+                <i class="bi bi-hourglass-split fs-3 d-block mb-2"></i>Loading…
+              </td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <!-- Pagination -->
+        <div class="d-flex justify-content-center py-3" id="pagination-wrap"></div>
+      </div>
+    </div>
+
+  </div><!-- /row -->
+</div><!-- /container -->
+
+<!-- Detail Modal -->
+<div class="modal fade" id="detailModal" tabindex="-1">
+  <div class="modal-dialog modal-lg modal-dialog-scrollable">
+    <div class="modal-content" style="border-radius:12px; border:none;">
+      <div class="modal-header">
+        <h5 class="modal-title" id="modal-name">—</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body" id="modal-body"></div>
+      <div class="modal-footer">
+        <a id="modal-link" href="#" target="_blank" class="btn btn-primary btn-sm">
+          <i class="bi bi-box-arrow-up-right me-1"></i>View Profile on Guru.com
+        </a>
+        <button class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Close</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+<script>
+  let currentPage = 1;
+  let sortCol = 'Name';
+  let sortDir = 'asc';
+  let detailModal;
+
+  document.addEventListener('DOMContentLoaded', () => {
+    detailModal = new bootstrap.Modal(document.getElementById('detailModal'));
+    fetchData();
+    fetchStats();
+
+    // Enter key on search
+    document.getElementById('q').addEventListener('keydown', e => {
+      if (e.key === 'Enter') { currentPage = 1; fetchData(); }
+    });
+    // Live rate display
+    ['rate_min','rate_max'].forEach(id => {
+      document.getElementById(id).addEventListener('input', updateRateDisplay);
+    });
+  });
+
+  function updateRateDisplay() {
+    const mn = document.getElementById('rate_min').value || '{{ rate_min }}';
+    const mx = document.getElementById('rate_max').value || '{{ rate_max }}';
+    document.getElementById('rate-display').textContent = `$${mn} – $${mx}`;
+  }
+
+  function buildParams() {
+    const p = new URLSearchParams();
+    const q    = document.getElementById('q').value.trim();
+    const cat  = document.getElementById('category').value;
+    const st   = document.getElementById('state').value;
+    const rmin = document.getElementById('rate_min').value;
+    const rmax = document.getElementById('rate_max').value;
+    const fb   = document.getElementById('feedback').checked ? 'yes' : '';
+
+    if (q)    p.set('q', q);
+    if (cat)  p.set('category', cat);
+    if (st)   p.set('state', st);
+    if (rmin) p.set('rate_min', rmin);
+    if (rmax) p.set('rate_max', rmax);
+    if (fb)   p.set('feedback', fb);
+    return p;
+  }
+
+  function applyFilters() { currentPage = 1; fetchData(); fetchStats(); }
+
+  function resetFilters() {
+    document.getElementById('q').value = '';
+    document.getElementById('category').value = '';
+    document.getElementById('state').value = '';
+    document.getElementById('rate_min').value = '{{ rate_min }}';
+    document.getElementById('rate_max').value = '{{ rate_max }}';
+    document.getElementById('feedback').checked = false;
+    updateRateDisplay();
+    currentPage = 1;
+    fetchData();
+    fetchStats();
+  }
+
+  function sortBy(col) {
+    if (sortCol === col) {
+      sortDir = sortDir === 'asc' ? 'desc' : 'asc';
+    } else {
+      sortCol = col;
+      sortDir = 'asc';
+    }
+    // update header icons
+    document.querySelectorAll('th[data-col]').forEach(th => {
+      th.classList.remove('sorted');
+      const icon = th.querySelector('.sort-icon');
+      icon.className = 'bi bi-arrow-down-up sort-icon';
+    });
+    const activeTh = document.querySelector(`th[data-col="${col}"]`);
+    if (activeTh) {
+      activeTh.classList.add('sorted');
+      const icon = activeTh.querySelector('.sort-icon');
+      icon.className = `bi bi-arrow-${sortDir === 'asc' ? 'up' : 'down'} sort-icon`;
+    }
+    currentPage = 1;
+    fetchData();
+  }
+
+  async function fetchData() {
+    const loading = document.getElementById('loading');
+    loading.classList.add('active');
+
+    const params = buildParams();
+    params.set('page', currentPage);
+    params.set('per_page', document.getElementById('per-page').value);
+    params.set('sort', sortCol);
+    params.set('dir', sortDir);
+
+    try {
+      const res = await fetch(`/api/freelancers?${params}`);
+      const json = await res.json();
+      renderTable(json);
+      renderPagination(json.total, json.page, json.pages);
+    } catch(e) {
+      console.error(e);
+    } finally {
+      loading.classList.remove('active');
+    }
+  }
+
+  async function fetchStats() {
+    const params = buildParams();
+    try {
+      const res = await fetch(`/api/stats?${params}`);
+      const s = await res.json();
+      document.getElementById('stat-total').textContent  = s.total.toLocaleString();
+      document.getElementById('stat-web').textContent    = (s.by_category['Web Development'] || 0).toLocaleString();
+      document.getElementById('stat-mkt').textContent    = (s.by_category['Performance Marketing'] || 0).toLocaleString();
+      document.getElementById('stat-full').textContent   = (s.by_category['Full Stack Development'] || 0).toLocaleString();
+      document.getElementById('stat-median').textContent = s.rates.median ? `$${s.rates.median}` : '—';
+    } catch(e) {}
+  }
+
+  function catClass(cat) {
+    if (cat.includes('Web')) return 'cat-web';
+    if (cat.includes('Marketing')) return 'cat-mkt';
+    return 'cat-full';
+  }
+
+  function renderSkills(skillStr) {
+    if (!skillStr || skillStr === 'N/A') return '<span class="text-muted">—</span>';
+    const tags = skillStr.split('|').map(s => s.trim()).filter(Boolean).slice(0, 5);
+    return `<div class="skill-tags">${tags.map(t =>
+      `<span class="skill-tag">${escHtml(t)}</span>`).join('')}</div>`;
+  }
+
+  function escHtml(s) {
+    return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  }
+
+  function renderTable(json) {
+    const tbody = document.getElementById('table-body');
+    const start = (json.page - 1) * json.per_page + 1;
+
+    document.getElementById('count-shown').textContent =
+      `${start}–${Math.min(start + json.data.length - 1, json.total)}`;
+    document.getElementById('count-total').textContent = json.total.toLocaleString();
+
+    if (!json.data.length) {
+      tbody.innerHTML = `<tr><td colspan="7" class="text-center text-muted py-5">
+        <i class="bi bi-search fs-3 d-block mb-2"></i>No freelancers match your filters.</td></tr>`;
+      return;
+    }
+
+    tbody.innerHTML = json.data.map((f, i) => `
+      <tr style="cursor:pointer" onclick="showDetail(${i})" data-idx="${i}">
+        <td class="name-cell">
+          <a href="${escHtml(f.Profile_URL)}" target="_blank" onclick="event.stopPropagation()">
+            ${escHtml(f.Name)}
+          </a>
+          <small>${escHtml(f.Title !== 'N/A' ? f.Title : '')}</small>
+        </td>
+        <td><span class="badge-cat ${catClass(f.Category)}">${escHtml(f.Category)}</span></td>
+        <td style="font-size:.83rem">${escHtml(f.State || f.Location || '—')}</td>
+        <td class="rate-badge">${f.Hourly_Rate !== 'N/A' ? escHtml(f.Hourly_Rate) : '<span class="text-muted">—</span>'}</td>
+        <td class="feedback-badge">${f.Feedback !== 'N/A' ?
+          `<i class="bi bi-star-fill me-1" style="font-size:.75rem"></i>${escHtml(f.Feedback)}` :
+          '<span class="text-muted">—</span>'}</td>
+        <td>${renderSkills(f.Skills)}</td>
+        <td class="bio-cell"><div class="bio-text">${escHtml(f.Bio !== 'N/A' ? f.Bio : '')}</div></td>
+      </tr>`).join('');
+
+    // store data for modal
+    window._tableData = json.data;
+  }
+
+  function showDetail(idx) {
+    const f = window._tableData[idx];
+    if (!f) return;
+
+    document.getElementById('modal-name').textContent = f.Name;
+    document.getElementById('modal-link').href = f.Profile_URL;
+
+    const skills = (f.Skills !== 'N/A' && f.Skills)
+      ? f.Skills.split('|').map(s => `<span class="skill-tag">${escHtml(s.trim())}</span>`).join('')
+      : '—';
+
+    document.getElementById('modal-body').innerHTML = `
+      <div class="detail-row"><span class="lbl">Title</span>
+        <span class="val">${escHtml(f.Title)}</span></div>
+      <div class="detail-row"><span class="lbl">Category</span>
+        <span class="val"><span class="badge-cat ${catClass(f.Category)}">${escHtml(f.Category)}</span></span></div>
+      <div class="detail-row"><span class="lbl">Location</span>
+        <span class="val"><i class="bi bi-geo-alt-fill text-danger me-1"></i>${escHtml(f.Location)}</span></div>
+      <div class="detail-row"><span class="lbl">Hourly Rate</span>
+        <span class="val rate-badge fs-5">${escHtml(f.Hourly_Rate)}</span></div>
+      <div class="detail-row"><span class="lbl">Feedback Score</span>
+        <span class="val feedback-badge">${f.Feedback !== 'N/A' ? escHtml(f.Feedback) : '—'}</span></div>
+      <div class="detail-row"><span class="lbl">Earnings / Year</span>
+        <span class="val">${escHtml(f.Earnings_Per_Yr)}</span></div>
+      <div class="detail-row"><span class="lbl">Skills</span>
+        <span class="val"><div class="skill-tags">${skills}</div></span></div>
+      <div class="mt-3">
+        <div class="lbl mb-2">Bio</div>
+        <div class="detail-bio">${escHtml(f.Bio !== 'N/A' ? f.Bio : 'No description available.')}</div>
+      </div>`;
+
+    detailModal.show();
+  }
+
+  function renderPagination(total, page, pages) {
+    const wrap = document.getElementById('pagination-wrap');
+    if (pages <= 1) { wrap.innerHTML = ''; return; }
+
+    let html = '<ul class="pagination flex-wrap justify-content-center mb-0">';
+
+    // Prev
+    html += `<li class="page-item ${page===1?'disabled':''}">
+      <a class="page-link" href="#" onclick="goPage(${page-1});return false">
+        <i class="bi bi-chevron-left"></i></a></li>`;
+
+    // Page numbers — show up to 7 around current
+    const range = [];
+    range.push(1);
+    if (page > 4) range.push('…');
+    for (let p = Math.max(2, page-2); p <= Math.min(pages-1, page+2); p++) range.push(p);
+    if (page < pages - 3) range.push('…');
+    if (pages > 1) range.push(pages);
+
+    range.forEach(p => {
+      if (p === '…') {
+        html += `<li class="page-item disabled"><span class="page-link">…</span></li>`;
+      } else {
+        html += `<li class="page-item ${p===page?'active':''}">
+          <a class="page-link" href="#" onclick="goPage(${p});return false">${p}</a></li>`;
+      }
+    });
+
+    // Next
+    html += `<li class="page-item ${page===pages?'disabled':''}">
+      <a class="page-link" href="#" onclick="goPage(${page+1});return false">
+        <i class="bi bi-chevron-right"></i></a></li>`;
+
+    html += '</ul>';
+    wrap.innerHTML = html;
+  }
+
+  function goPage(p) {
+    currentPage = p;
+    fetchData();
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }
+
+  function exportCSV() {
+    const params = buildParams();
+    window.location.href = `/api/download?${params}`;
+  }
+</script>
+</body>
+</html>
