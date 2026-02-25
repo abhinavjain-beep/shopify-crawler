@@ -1,59 +1,89 @@
-import os
+"""
+Guru.com US Freelancer Scraper
+Collects 1000 US-based freelancers across Web Development,
+Performance Marketing, and Full Stack Development.
+
+Data extracted directly from listing cards (no profile visits needed):
+  Name, Title, Location, Bio, Skills, Hourly_Rate, Feedback,
+  Earnings_Per_Year, Category, Profile_URL
+"""
+
 import re
-import json
 import asyncio
+import logging
 import pandas as pd
 from pathlib import Path
+from bs4 import BeautifulSoup
 
 from scraper import Scraper
 
-BASE_DIR = Path(__file__).resolve().parent
+logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
+logger = logging.getLogger("freelancer_scraper")
+
+BASE_DIR    = Path(__file__).resolve().parent
 OUTPUT_FILE = BASE_DIR / "freelancers.csv"
 
-BASE_SEARCH_URL = "https://www.upwork.com/search/profiles/"
-BASE_PROFILE_URL = "https://www.upwork.com/freelancers/"
+BASE_URL     = "https://www.guru.com"
+TARGET_TOTAL = 1000
+MAX_PAGES    = 200   # per-category ceiling (20 results/page × 200 = 4 000 raw cards)
 
-MAX_PAGES = 20  # maximum pages to scrape per category
-
+# Guru.com URL patterns for each target category
+# (all have large pools and decent % US freelancers)
 CATEGORIES = [
-    {"name": "Web Development",       "query": "web development"},
-    {"name": "Performance Marketing", "query": "performance marketing"},
-    {"name": "Full Stack Development","query": "full stack development"},
+    {
+        "name":  "Web Development",
+        "url":   "https://www.guru.com/d/freelancers/c/programming-development/sc/web-development-design/",
+        "quota": 500,   # target US freelancers from this category (dedup skips already-saved)
+    },
+    {
+        "name":  "Performance Marketing",
+        "url":   "https://www.guru.com/d/freelancers/c/sales-marketing/",
+        "quota": 150,   # generous buffer above 100 already collected
+    },
+    {
+        "name":  "Full Stack Development",
+        "url":   "https://www.guru.com/d/freelancers/skill/full-stack/",  # 39k results vs 24k
+        "quota": 500,
+    },
+    {
+        "name":  "Full Stack Development",   # supplemental — different URL pool
+        "url":   "https://www.guru.com/d/freelancers/c/programming-development/sc/programming-software/",
+        "quota": 200,
+    },
 ]
 
+HEADERS = {
+    "User-Agent": (
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+        "AppleWebKit/537.36 (KHTML, like Gecko) "
+        "Chrome/120.0.0.0 Safari/537.36"
+    ),
+    "Accept": "text/html,application/xhtml+xml,*/*;q=0.8",
+    "Accept-Language": "en-US,en;q=0.9",
+    "Accept-Encoding": "gzip, deflate, br",
+    "DNT": "1",
+}
 
-async def run_in_batches(tasks, max_concurrent_tasks: int = 5):
+
+async def run_in_batches(tasks: list, max_concurrent: int = 10) -> list:
     results = []
-    for i in range(0, len(tasks), max_concurrent_tasks):
-        batch = tasks[i:i + max_concurrent_tasks]
-        print(f"  Running batch {i // max_concurrent_tasks + 1}: {len(batch)} profiles")
+    for i in range(0, len(tasks), max_concurrent):
+        batch = tasks[i:i + max_concurrent]
         batch_results = await asyncio.gather(*batch)
         results.extend(batch_results)
     return results
 
 
-class UpworkScraper:
+class GurufScraper:
 
-    def __init__(self):
-        self.scraper = Scraper(requests_per_second=2, timeout=30)
-        self.headers = {
-            "User-Agent": (
-                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-                "AppleWebKit/537.36 (KHTML, like Gecko) "
-                "Chrome/120.0.0.0 Safari/537.36"
-            ),
-            "Accept": (
-                "text/html,application/xhtml+xml,application/xml;"
-                "q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8"
-            ),
-            "Accept-Language": "en-US,en;q=0.9",
-            "Accept-Encoding": "gzip, deflate, br",
-            "Referer": "https://www.upwork.com/",
-            "Sec-Fetch-Dest": "document",
-            "Sec-Fetch-Mode": "navigate",
-            "Sec-Fetch-Site": "same-origin",
-        }
+    def __init__(self, proxies: list = None):
+        self.scraper = Scraper(requests_per_second=3, timeout=30, proxies=proxies or [])
+        self.headers = HEADERS
         self.seen_urls: set = set()
+        self._csv_preloaded = False
+        self._total_written = 0
+
+    # ------------------------------------------------------------------ CSV
 
     def to_csv(self, data: dict):
         df = pd.json_normalize(data)
@@ -64,303 +94,214 @@ class UpworkScraper:
             index=False,
             encoding="utf-8-sig",
         )
+        self._total_written += 1
 
-    def _extract_json_from_script(self, soup, pattern: str):
-        """Try to extract JSON data embedded in <script> tags matching a pattern."""
-        for script in soup.find_all("script"):
-            text = script.get_text()
-            if pattern in text:
-                try:
-                    # Look for JSON object/array in the script text
-                    match = re.search(r'\{.*\}', text, re.DOTALL)
-                    if match:
-                        return json.loads(match.group())
-                except (json.JSONDecodeError, Exception):
-                    pass
-        return None
+    # --------------------------------------------------------- Deduplication
 
-    def _extract_profile_urls_from_json(self, soup) -> list:
-        """Extract profile UIDs from embedded JSON state in Upwork search pages."""
-        urls = []
-        for script in soup.find_all("script"):
-            text = script.get_text()
-            # Upwork embeds profile data with ciphertext (encrypted UID)
-            # Pattern: ~<alphanumeric> in JSON keys or values
-            matches = re.findall(r'["\']ciphertext["\']\s*:\s*["\']([^"\']+)["\']', text)
-            for uid in matches:
-                url = f"{BASE_PROFILE_URL}~{uid}"
-                if url not in self.seen_urls:
-                    self.seen_urls.add(url)
-                    urls.append(url)
-            if urls:
-                break
-        return urls
+    def _preload_seen(self):
+        if not OUTPUT_FILE.exists():
+            return
+        try:
+            df = pd.read_csv(OUTPUT_FILE, usecols=["Profile_URL"], encoding="utf-8-sig")
+            self.seen_urls.update(df["Profile_URL"].dropna().tolist())
+            self._total_written = len(self.seen_urls)
+            logger.info(f"Resuming — {self._total_written} profiles already in CSV.")
+        except Exception as e:
+            logger.warning(f"Pre-load failed: {e}")
 
-    async def search_page(self, query: str, page: int) -> tuple[list, bool]:
-        """
-        Fetch one page of Upwork search results for a given query (US only).
-        Returns (list_of_profile_urls, has_next_page).
-        """
-        params = {
-            "q": query,
-            "country": "United States",
-            "page": str(page),
-        }
-        soup = await self.scraper.get_soup(BASE_SEARCH_URL, params=params, headers=self.headers)
-        if not soup:
-            print(f"    Failed to fetch search page {page} for '{query}'")
-            return [], False
+    def _is_new(self, url: str) -> bool:
+        if not self._csv_preloaded:
+            self._preload_seen()
+            self._csv_preloaded = True
+        return url not in self.seen_urls
 
-        urls = []
+    # -------------------------------------------- Parse one listing card
 
-        # Strategy A: direct HTML anchor tags pointing to freelancer profiles
-        anchors = soup.select("a[href*='/freelancers/~']")
-        for a in anchors:
-            href = a.get("href", "")
-            # Normalise to full URL, strip query params
-            clean = re.sub(r'\?.*$', '', href)
-            if not clean.startswith("http"):
-                clean = "https://www.upwork.com" + clean
-            if clean not in self.seen_urls:
-                self.seen_urls.add(clean)
-                urls.append(clean)
+    @staticmethod
+    def _text(el, selector: str) -> str:
+        found = el.select_one(selector)
+        return found.get_text(strip=True) if found else "N/A"
 
-        # Strategy B: JSON ciphertext extraction if HTML yielded nothing
-        if not urls:
-            urls = self._extract_profile_urls_from_json(soup)
+    def _parse_card(self, card, category: str) -> dict | None:
+        """Extract all fields from a Guru.com freelancer listing card."""
 
-        # Detect next page: look for a pagination element or rely on result count
-        has_next = bool(soup.select_one(
-            "[data-test='pagination-next']:not([disabled]), "
-            "a[aria-label='Next page'], "
-            "li.up-pagination-item-next:not(.disabled)"
-        ))
-        # Fallback: if we got results and haven't explicitly seen "no next", assume there might be one
-        if not has_next and urls:
-            # Check if the page has a "no results" indicator
-            no_results = soup.find(string=re.compile(r'no (freelancers|results)', re.I))
-            has_next = no_results is None and page < MAX_PAGES
+        # Profile URL & Name
+        name_link = card.select_one("h3.freelancerAvatar__screenName a")
+        if not name_link:
+            return None
+        profile_url = BASE_URL + name_link.get("href", "")
+        name = name_link.get_text(strip=True)
 
-        return urls, has_next
+        # Location parts
+        city    = self._text(card, ".freelancerAvatar__location--city").rstrip(",").strip()
+        state   = self._text(card, ".freelancerAvatar__location--state").rstrip(",").strip()
+        country = self._text(card, ".freelancerAvatar__location--country")
 
-    def _parse_profile_html(self, soup, url: str, category: str) -> dict:
-        """Parse a freelancer profile page with HTML selectors."""
-        data = {
-            "Name": "N/A",
-            "Title": "N/A",
-            "Location": "N/A",
-            "Bio": "N/A",
-            "Skills": "N/A",
-            "Category": category,
-            "Profile_URL": url,
-            "Hourly_Rate": "N/A",
-            "Job_Success_Score": "N/A",
-        }
-
-        # Name — multiple selector attempts for robustness
-        for sel in [
-            "h1[itemprop='name']",
-            "span[itemprop='name']",
-            "h1.freelancer-name",
-            "[data-test='freelancer-name']",
-            "h1",
-        ]:
-            el = soup.select_one(sel)
-            if el:
-                data["Name"] = el.get_text(strip=True)
-                break
-
-        # Title / Professional headline
-        for sel in [
-            "p.freelancer-title",
-            "[data-test='freelancer-title']",
-            "h2.freelancer-title",
-            "p[itemprop='jobTitle']",
-            "div.title",
-        ]:
-            el = soup.select_one(sel)
-            if el:
-                data["Title"] = el.get_text(strip=True)
-                break
-
-        # Location
-        for sel in [
-            "[data-test='location']",
-            "span[itemprop='addressLocality']",
-            "li:-soup-contains('United States')",
-            "div.location",
-            "span.location",
-        ]:
-            el = soup.select_one(sel)
-            if el:
-                data["Location"] = el.get_text(strip=True)
-                break
-
-        # Bio / Overview
-        for sel in [
-            "[data-test='description']",
-            "div.freelancer-overview",
-            "div.overview",
-            "section.air3-card-section div.text-body",
-            "div[itemprop='description']",
-            "p.description",
-        ]:
-            el = soup.select_one(sel)
-            if el:
-                data["Bio"] = el.get_text(separator=" ", strip=True)[:1000]
-                break
-
-        # Skills
-        skill_els = soup.select(
-            "[data-test='skill-badge'], "
-            "span.skill-tag, "
-            "a.skill-tag, "
-            "li.skill, "
-            "span[data-test='freetext-skill']"
-        )
-        if skill_els:
-            data["Skills"] = ", ".join(s.get_text(strip=True) for s in skill_els)
-
-        # Hourly Rate
-        for sel in [
-            "[data-test='hourly-rate']",
-            "span.rate",
-            "div.rate",
-            "h3:-soup-contains('$')",
-            "span:-soup-contains('/hr')",
-        ]:
-            el = soup.select_one(sel)
-            if el:
-                data["Hourly_Rate"] = el.get_text(strip=True)
-                break
-
-        # Job Success Score
-        for sel in [
-            "[data-test='job-success-score']",
-            "span.job-success",
-            "div.job-success",
-            "span:-soup-contains('Job Success')",
-        ]:
-            el = soup.select_one(sel)
-            if el:
-                data["Job_Success_Score"] = el.get_text(strip=True)
-                break
-
-        return data
-
-    def _parse_profile_from_json(self, soup, url: str, category: str) -> dict | None:
-        """Try to extract profile data from embedded JSON in the page."""
-        for script in soup.find_all("script", {"type": "application/json"}):
-            try:
-                state = json.loads(script.get_text())
-                # Flatten nested dicts to find relevant keys
-                text = json.dumps(state)
-                if '"name"' not in text and '"title"' not in text:
-                    continue
-
-                # Try to navigate to profile object
-                profile = None
-                # Common Upwork SSR key paths
-                for key in ["profile", "freelancerProfile", "user", "contractor"]:
-                    if key in state:
-                        profile = state[key]
-                        break
-
-                if not profile and "props" in state:
-                    profile = state.get("props", {}).get("profile") or \
-                               state.get("props", {}).get("pageProps", {}).get("profile")
-
-                if not profile:
-                    continue
-
-                skills_raw = profile.get("skills") or profile.get("skillTags") or []
-                if isinstance(skills_raw, list):
-                    skills = ", ".join(
-                        s.get("name", s) if isinstance(s, dict) else str(s)
-                        for s in skills_raw
-                    )
-                else:
-                    skills = str(skills_raw)
-
-                return {
-                    "Name": profile.get("name") or profile.get("fullName") or "N/A",
-                    "Title": profile.get("title") or profile.get("professionalTitle") or "N/A",
-                    "Location": (
-                        profile.get("location", {}).get("city", "") + ", " +
-                        profile.get("location", {}).get("state", "")
-                    ).strip(", ") or "N/A",
-                    "Bio": (profile.get("description") or profile.get("overview") or "N/A")[:1000],
-                    "Skills": skills or "N/A",
-                    "Category": category,
-                    "Profile_URL": url,
-                    "Hourly_Rate": str(profile.get("hourlyRate") or profile.get("rate") or "N/A"),
-                    "Job_Success_Score": str(
-                        profile.get("jobSuccessScore") or
-                        profile.get("totalFeedback") or "N/A"
-                    ),
-                }
-            except (json.JSONDecodeError, KeyError, TypeError):
-                continue
-        return None
-
-    async def scrape_profile(self, url: str, category: str) -> dict | None:
-        """Scrape a single Upwork freelancer profile page."""
-        soup = await self.scraper.get_soup(url, headers=self.headers)
-        if not soup:
-            print(f"    Failed to fetch profile: {url}")
+        # Only keep US freelancers
+        if country != "United States":
             return None
 
-        # Try JSON extraction first (richer, more reliable)
-        data = self._parse_profile_from_json(soup, url, category)
-        if not data:
-            # Fall back to HTML parsing
-            data = self._parse_profile_html(soup, url, category)
+        location = ", ".join(filter(lambda x: x and x != "N/A", [city, state, country]))
 
-        # Skip clearly empty records
-        if data["Name"] == "N/A" and data["Title"] == "N/A":
-            return None
+        # Service title (closest thing to "professional headline")
+        title = self._text(card, ".serviceListing__title a")
 
-        print(f"    Scraped: {data['Name']} | {data['Title']} | {data['Location']}")
-        self.to_csv(data)
-        return data
+        # Bio / description from the service card
+        bio = self._text(card, ".serviceListing__desc")
+
+        # Skills from the skill list (skip the first which is the category badge)
+        skill_tags = card.select(".skillsList__skill a")
+        skills = " | ".join(t.get_text(strip=True) for t in skill_tags) or "N/A"
+
+        # Hourly rate (from service listing)
+        rate_raw = self._text(card, ".serviceListing__rates")
+        # extract just the hourly part: "$20/hr"
+        rate_match = re.search(r'\$[\d,]+/hr', rate_raw)
+        hourly_rate = rate_match.group(0) if rate_match else rate_raw
+
+        # Feedback score
+        feedback = self._text(card, ".freelancerAvatar__feedback")
+
+        # Earnings per year
+        earnings = self._text(card, ".earnings__amount")
+        if earnings != "N/A":
+            earnings = f"${earnings}/yr"
+
+        return {
+            "Name":            name,
+            "Title":           title,
+            "Location":        location,
+            "Bio":             bio[:800],
+            "Skills":          skills,
+            "Hourly_Rate":     hourly_rate,
+            "Feedback":        feedback,
+            "Earnings_Per_Yr": earnings,
+            "Category":        category,
+            "Profile_URL":     profile_url,
+        }
+
+    # ----------------------------------------- Fetch + parse one search page
+
+    async def fetch_page(self, url: str, page: int) -> tuple[list, bool, int]:
+        """
+        Fetch one Guru.com directory page.
+        Returns (us_freelancer_dicts, has_next_page, raw_card_count).
+        raw_card_count lets the caller distinguish "no US on this page"
+        from "page was empty" (so it keeps paginating when needed).
+        """
+        page_url = url if page == 1 else f"{url}pg/{page}/"
+        hdrs = {**self.headers, "Referer": url if page > 1 else BASE_URL + "/"}
+
+        response = await self.scraper.get(page_url, headers=hdrs)
+        if response is None:
+            logger.warning(f"No response for {page_url}")
+            return [], False, 0
+
+        if response.status_code == 404:
+            return [], False, 0
+
+        if response.status_code != 200:
+            logger.warning(f"HTTP {response.status_code} on {page_url}")
+            return [], False, 0
+
+        soup = BeautifulSoup(response.content, "html.parser")
+        cards = soup.select("div.record.findGuruRecord")
+
+        # Extract US freelancers from cards
+        results = []
+        for card in cards:
+            data = self._parse_card(card, "")   # category injected by caller
+            if data and self._is_new(data["Profile_URL"]):
+                self.seen_urls.add(data["Profile_URL"])
+                results.append(data)
+
+        has_next = bool(cards) and page < MAX_PAGES
+        return results, has_next, len(cards)
+
+    # ----------------------------------------------- Per-category loop
 
     async def scrape_category(self, category: dict):
-        """Scrape all pages for a single category and write results to CSV."""
-        name = category["name"]
-        query = category["query"]
-        print(f"\n=== Category: {name} ===")
+        name  = category["name"]
+        url   = category["url"]
+        quota = category["quota"]
 
-        all_urls = []
+        print(f"\n{'='*60}")
+        print(f"Category : {name}")
+        print(f"URL      : {url}")
+        print(f"Quota    : {quota} US freelancers")
+        print(f"{'='*60}")
+
+        category_count = 0
+        consecutive_empty = 0   # stop only after 3 consecutive empty pages
+
         for page in range(1, MAX_PAGES + 1):
-            print(f"  Fetching search page {page}…")
-            urls, has_next = await self.search_page(query, page)
-            print(f"  Found {len(urls)} new profile URLs on page {page}")
-            all_urls.extend(urls)
-            if not has_next or not urls:
+            if category_count >= quota or self._total_written >= TARGET_TOTAL:
+                break
+
+            results, has_next, raw_count = await self.fetch_page(url, page)
+
+            # Track consecutive empty pages to handle intermittent blank responses
+            if raw_count == 0:
+                consecutive_empty += 1
+                print(f"  Page {page:3d} — empty (consecutive empty: {consecutive_empty})")
+                if consecutive_empty >= 3:
+                    print(f"  3 consecutive empty pages — stopping.")
+                    break
+                continue
+            else:
+                consecutive_empty = 0
+
+            # Inject category name
+            for r in results:
+                r["Category"] = name
+
+            # Write new records
+            written_this_page = 0
+            for r in results:
+                if category_count >= quota or self._total_written >= TARGET_TOTAL:
+                    break
+                self.to_csv(r)
+                category_count += 1
+                written_this_page += 1
+                print(
+                    f"  [{self._total_written:4}/{TARGET_TOTAL}]"
+                    f"  {r['Name'][:30]:30}"
+                    f"  {r['Location'][:35]:35}"
+                    f"  {r['Hourly_Rate']}"
+                )
+
+            print(
+                f"  Page {page:3d} — raw={raw_count} cards,"
+                f" {written_this_page} new US (category total: {category_count})"
+            )
+
+            if not has_next:
                 print(f"  No more pages for '{name}'.")
                 break
 
-        print(f"  Total profiles to scrape for '{name}': {len(all_urls)}")
-        tasks = [self.scrape_profile(url, name) for url in all_urls]
-        results = await run_in_batches(tasks, max_concurrent_tasks=5)
-        scraped = [r for r in results if r is not None]
-        print(f"  Done. Scraped {len(scraped)} profiles for '{name}'.")
-        return scraped
+        print(f"\n  '{name}' done — {category_count} US freelancers written.")
+
+    # -------------------------------------------------- Entry point
 
     async def main(self):
-        print(f"Starting Upwork US Freelancer Scraper")
-        print(f"Output: {OUTPUT_FILE}")
-        print(f"Categories: {[c['name'] for c in CATEGORIES]}")
+        print(f"Guru.com US Freelancer Scraper")
+        print(f"Target   : {TARGET_TOTAL} US freelancers")
+        print(f"Output   : {OUTPUT_FILE}")
 
-        all_results = []
-        for category in CATEGORIES:
-            results = await self.scrape_category(category)
-            all_results.extend(results)
+        try:
+            for cat in CATEGORIES:
+                if self._total_written >= TARGET_TOTAL:
+                    print(f"\nReached {TARGET_TOTAL} target — stopping.")
+                    break
+                await self.scrape_category(cat)
+        finally:
+            await self.scraper.session.aclose()
 
-        await self.scraper.close()
-        print(f"\n=== Finished. Total freelancers scraped: {len(all_results)} ===")
-        print(f"Results saved to: {OUTPUT_FILE}")
+        print(f"\n{'='*60}")
+        print(f"DONE — {self._total_written} US freelancers saved to:")
+        print(f"  {OUTPUT_FILE}")
+        print(f"{'='*60}")
 
 
 if __name__ == "__main__":
-    asyncio.run(UpworkScraper().main())
+    asyncio.run(GurufScraper().main())
