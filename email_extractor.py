@@ -36,8 +36,13 @@ HEADERS = {
 }
 
 # Domains we don't want to follow as "personal websites"
-SKIP_DOMAINS = {"guru.com", "linkedin.com", "facebook.com", "twitter.com",
-                "instagram.com", "youtube.com", "github.com", "t.co"}
+SKIP_DOMAINS = {
+    "guru.com", "linkedin.com", "facebook.com", "twitter.com",
+    "x.com", "instagram.com", "youtube.com", "github.com",
+    "t.co", "behance.net", "dribbble.com", "clutch.co",
+    "apple.com", "apps.apple.com", "play.google.com", "google.com",
+    "yelp.com", "crunchbase.com", "upwork.com", "fiverr.com",
+}
 
 
 def extract_email_from_soup(soup: BeautifulSoup) -> str:
@@ -55,11 +60,12 @@ def get_website_link(soup: BeautifulSoup) -> str | None:
         href = a.get("href", "")
         if not href.startswith("http"):
             continue
-        # Skip guru.com internal links and social media
-        domain = href.split("/")[2].lstrip("www.")
-        if any(href.split("/")[2].endswith(d) for d in SKIP_DOMAINS):
+        try:
+            domain = href.split("/")[2]
+        except IndexError:
             continue
-        if "guru.com" in href:
+        # Skip known non-personal-website domains
+        if any(domain == d or domain.endswith("." + d) for d in SKIP_DOMAINS):
             continue
         return href
     return None
@@ -90,15 +96,6 @@ async def fetch_email(row: dict, scraper: Scraper, index: int, total: int) -> di
     return {**row, "Email": email}
 
 
-async def run_in_batches(tasks: list, batch_size: int) -> list:
-    results = []
-    for i in range(0, len(tasks), batch_size):
-        batch = tasks[i:i + batch_size]
-        batch_results = await asyncio.gather(*batch)
-        results.extend(batch_results)
-    return results
-
-
 async def main():
     # Load input
     df = pd.read_csv(INPUT_FILE, encoding="utf-8-sig")
@@ -124,31 +121,37 @@ async def main():
         return
 
     scraper = Scraper(requests_per_second=RATE, timeout=30)
+    total_found = 0
 
     try:
-        tasks = [
-            fetch_email(row, scraper, i + len(done_urls) + 1, total)
-            for i, row in enumerate(pending)
-        ]
+        for batch_start in range(0, len(pending), BATCH_SIZE):
+            batch = pending[batch_start:batch_start + BATCH_SIZE]
+            tasks = [
+                fetch_email(row, scraper, batch_start + i + len(done_urls) + 1, total)
+                for i, row in enumerate(batch)
+            ]
+            results = await asyncio.gather(*tasks)
 
-        results = await run_in_batches(tasks, BATCH_SIZE)
-
-        # Append to output CSV in one go
-        out_df = pd.DataFrame(results)
-        out_df.to_csv(
-            OUTPUT_FILE,
-            mode="a",
-            header=not OUTPUT_FILE.exists(),
-            index=False,
-            encoding="utf-8-sig",
-        )
+            # Save this batch immediately (resume-safe)
+            out_df = pd.DataFrame(results)
+            out_df.to_csv(
+                OUTPUT_FILE,
+                mode="a",
+                header=not OUTPUT_FILE.exists(),
+                index=False,
+                encoding="utf-8-sig",
+            )
+            batch_found = sum(1 for r in results if r.get("Email"))
+            total_found += batch_found
+            done_urls.update(r["Profile_URL"] for r in results)
 
     finally:
         await scraper.session.aclose()
 
-    found = sum(1 for r in results if r.get("Email"))
+    processed = len(done_urls)
     print(f"\n{'='*60}")
-    print(f"Done — {found}/{len(results)} emails found.")
+    print(f"Done — {total_found} emails found in this run.")
+    print(f"Total processed: {processed}/{total}")
     print(f"Output: {OUTPUT_FILE}")
     print(f"{'='*60}")
 
