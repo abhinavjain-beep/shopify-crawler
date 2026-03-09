@@ -234,12 +234,128 @@ Contributions are welcome! Please feel free to submit a Pull Request. For major 
 
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
 
+## 🤖 NotebookLM + Claude Integration (MCP)
+
+This project includes an MCP (Model Context Protocol) server that connects **Claude Desktop** directly to **Google NotebookLM**. Once configured, you can ask Claude to query your notebooks, list sources, and generate content grounded in your stored documents — all without leaving Claude.
+
+### How It Works
+
+The `notebooklm_mcp` package acts as a bridge:
+
+```
+Claude Desktop  ──MCP──►  notebooklm_mcp server  ──REST──►  NotebookLM API
+```
+
+### Prerequisites
+
+- [Claude Desktop](https://claude.ai/download) installed
+- Python 3.10+ and [`uv`](https://github.com/astral-sh/uv) (or `pip`)
+- A Google account with NotebookLM access
+- A Google Cloud project with the NotebookLM API enabled
+
+### Setup
+
+#### 1. Install dependencies
+
+```bash
+pip install -r requirements.txt
+```
+
+#### 2. Configure Google Cloud credentials
+
+1. Go to [Google Cloud Console](https://console.cloud.google.com/) and create a project.
+2. Enable the **NotebookLM API**.
+3. Under **APIs & Services → Credentials**, create an **OAuth 2.0 Client ID** for a *Desktop application*.
+4. Download the JSON file and save it to:
+
+```
+~/.config/notebooklm-mcp/client_secrets.json
+```
+
+#### 3. Authenticate
+
+```bash
+python -m notebooklm_mcp.auth
+```
+
+This opens a browser window for Google sign-in. Your token is saved to `~/.config/notebooklm-mcp/token.json`.
+
+#### 4. Configure Claude Desktop
+
+Copy the example config and edit the `PYTHONPATH` to point to this repository:
+
+```bash
+cp claude_desktop_config.example.json ~/path/to/claude_desktop_config.json
+```
+
+The config file location depends on your OS:
+
+| OS      | Path                                                         |
+| ------- | ------------------------------------------------------------ |
+| macOS   | `~/Library/Application Support/Claude/claude_desktop_config.json` |
+| Windows | `%APPDATA%\Claude\claude_desktop_config.json`                |
+| Linux   | `~/.config/Claude/claude_desktop_config.json`                |
+
+Example config:
+
+```json
+{
+  "mcpServers": {
+    "notebooklm": {
+      "command": "uv",
+      "args": ["run", "--with", "mcp", "python", "-m", "notebooklm_mcp.server"],
+      "env": {
+        "PYTHONPATH": "/path/to/shopify-crawler"
+      }
+    }
+  }
+}
+```
+
+#### 5. Restart Claude Desktop
+
+Quit and reopen Claude Desktop. You should see **notebooklm** listed under available MCP tools.
+
+### Available Tools
+
+| Tool              | Description                                           |
+| ----------------- | ----------------------------------------------------- |
+| `list_notebooks`  | List all notebooks in your NotebookLM account         |
+| `get_notebook`    | Get details and metadata for a specific notebook      |
+| `list_sources`    | List all sources (docs, URLs) within a notebook       |
+| `query_notebook`  | Ask a question; get a grounded answer with citations  |
+| `add_source`      | Add a URL, text snippet, or Drive file to a notebook  |
+| `create_notebook` | Create a new notebook                                 |
+| `get_notes`       | Retrieve all saved notes from a notebook              |
+
+### Example Prompts
+
+Once connected, try asking Claude:
+
+- *"List all my NotebookLM notebooks"*
+- *"What sources are in my Shopify Research notebook?"*
+- *"Query my market analysis notebook: what are the top Shopify partner service categories?"*
+- *"Add this URL to my research notebook: https://shopify.com/partners/..."*
+
+### Project Structure (MCP module)
+
+```
+notebooklm_mcp/
+├── __init__.py          # Package init
+├── server.py            # MCP server — tool definitions and handlers
+├── client.py            # Async NotebookLM REST API client
+└── auth.py              # Google OAuth2 authentication helper
+claude_desktop_config.example.json   # Claude Desktop config template
+```
+
 ## 🙏 Acknowledgments
 
 - Shopify for providing the Partners Directory
 - BeautifulSoup for HTML parsing
 - httpx for async HTTP requests
 - pandas for data manipulation
+- [MCP](https://modelcontextprotocol.io/) for the Claude integration protocol
+- Google NotebookLM team
 
 ## 📞 Support
 

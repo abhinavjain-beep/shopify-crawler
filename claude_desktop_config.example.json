@@ -1,0 +1,24 @@
+{
+  "mcpServers": {
+    "notebooklm": {
+      "command": "uv",
+      "args": [
+        "run",
+        "--with",
+        "mcp",
+        "--with",
+        "google-auth",
+        "--with",
+        "google-auth-oauthlib",
+        "--with",
+        "httpx",
+        "python",
+        "-m",
+        "notebooklm_mcp.server"
+      ],
+      "env": {
+        "PYTHONPATH": "/path/to/shopify-crawler"
+      }
+    }
+  }
+}
