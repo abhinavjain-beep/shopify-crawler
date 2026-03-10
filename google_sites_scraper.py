@@ -1,17 +1,22 @@
 """
 Google Sites Scraper - Return Prime
-Scrapes text content and file links (PDFs, Docs, Slides/Decks) from a Google Sites page.
-Requires authentication cookies since the site is private.
+Scrapes text, PDFs, Docs, and Decks from the GoKwik Sales Portal.
 
-HOW TO GET YOUR COOKIES:
-1. Open Chrome/Firefox and log in to your Google account
-2. Navigate to: https://sites.google.com/gokwik.co/salesportal/return-prime
-3. Open DevTools (F12) → Application tab → Cookies → https://sites.google.com
-4. Copy the values of: __Secure-3PSID, __Secure-3PAPISID, SSID, SID, HSID, APISID, SAPISID
-5. Paste them in the COOKIES section below or pass via --cookie-file argument
+AUTHENTICATION (required - site is private):
+  Option A: Set GOOGLE_COOKIES env variable with your browser cookie string
+    export GOOGLE_COOKIES="SID=xxx; SSID=yyy; APISID=zzz; __Secure-3PSID=aaa"
 
-OR: Export cookies from browser using an extension like "EditThisCookie" or "Cookie Quick Manager"
-and save as cookies.json, then run: python3 google_sites_scraper.py --cookie-file cookies.json
+  Option B: Provide a cookies.json file
+    python3 google_sites_scraper.py --cookie-file cookies.json
+
+  HOW TO GET COOKIES:
+    1. Open Chrome, log in to Google with your GoKwik/gokwik.co account
+    2. Navigate to: https://sites.google.com/gokwik.co/salesportal/return-prime
+    3. Open DevTools (F12) → Network tab → click any request to sites.google.com
+    4. Copy the full "Cookie:" header value
+    5. Export as env var: export GOOGLE_COOKIES="<paste here>"
+
+    OR use Chrome extension "EditThisCookie" → Export → save as cookies.json
 """
 
 import asyncio
@@ -19,10 +24,10 @@ import json
 import re
 import os
 import csv
-import sys
 import argparse
+import zipfile
 from pathlib import Path
-from urllib.parse import urljoin, urlparse
+from urllib.parse import urlparse
 from playwright.async_api import async_playwright
 import httpx
 
@@ -33,390 +38,368 @@ FILES_DIR = OUTPUT_DIR / "files"
 FILES_DIR.mkdir(exist_ok=True)
 
 TARGET_URL = "https://sites.google.com/gokwik.co/salesportal/return-prime"
+SITE_BASE = "sites.google.com/gokwik.co/salesportal"
 
-# ============================================================
-# PASTE YOUR GOOGLE COOKIES HERE (from browser DevTools)
-# Format: {"cookie_name": "cookie_value", ...}
-# Leave empty {} to use --cookie-file argument
-# ============================================================
-MANUAL_COOKIES = {}
-# Example:
-# MANUAL_COOKIES = {
-#     "SID": "your_sid_value_here",
-#     "__Secure-3PSID": "your_3psid_value_here",
-#     "SSID": "your_ssid_value_here",
-#     "APISID": "your_apisid_value_here",
-# }
-
-# File extension patterns to look for
-FILE_EXTENSIONS = [".pdf", ".doc", ".docx", ".ppt", ".pptx", ".xls", ".xlsx", ".csv", ".txt"]
-
-# Google Drive/Docs URL patterns
 GOOGLE_FILE_PATTERNS = [
-    r"docs\.google\.com/presentation",   # Google Slides (decks)
-    r"docs\.google\.com/document",       # Google Docs
-    r"docs\.google\.com/spreadsheets",   # Google Sheets
-    r"drive\.google\.com/file",          # Google Drive files
-    r"drive\.google\.com/open",          # Google Drive open
-    r"drive\.google\.com/uc",            # Google Drive direct download
-    r"drive\.google\.com/drive",         # Google Drive folder
+    r"docs\.google\.com/presentation",
+    r"docs\.google\.com/document",
+    r"docs\.google\.com/spreadsheets",
+    r"drive\.google\.com/file",
+    r"drive\.google\.com/open",
+    r"drive\.google\.com/uc",
+    r"drive\.google\.com/drive",
 ]
+FILE_EXTENSIONS = [".pdf", ".doc", ".docx", ".ppt", ".pptx", ".xls", ".xlsx"]
 
 
-def is_google_file_link(url: str) -> bool:
-    for pattern in GOOGLE_FILE_PATTERNS:
-        if re.search(pattern, url):
-            return True
-    return False
+def get_proxy_config():
+    proxy_url = os.environ.get("HTTPS_PROXY") or os.environ.get("HTTP_PROXY") or ""
+    if not proxy_url:
+        return None
+    m = re.match(r"http://([^:]+):([^@]+)@(.+)", proxy_url)
+    if m:
+        return {"server": f"http://{m.group(3)}", "username": m.group(1), "password": m.group(2)}
+    return {"server": proxy_url}
 
 
-def is_direct_file_link(url: str) -> bool:
-    parsed = urlparse(url)
-    path = parsed.path.lower()
-    return any(path.endswith(ext) for ext in FILE_EXTENSIONS)
+def is_file_link(url: str) -> bool:
+    if any(re.search(p, url) for p in GOOGLE_FILE_PATTERNS):
+        return True
+    return any(urlparse(url).path.lower().endswith(ext) for ext in FILE_EXTENSIONS)
 
 
-def is_video_link(url: str) -> bool:
-    return any(x in url for x in ["youtube.com", "youtu.be", "vimeo.com", "wistia.com"])
+def is_video(url: str) -> bool:
+    return any(x in url for x in ["youtube.com", "youtu.be", "vimeo.com", "wistia.com", "loom.com"])
 
 
 def get_file_type(url: str) -> str:
-    url_lower = url.lower()
-    if "presentation" in url_lower or ".ppt" in url_lower:
-        return "Presentation/Deck"
-    elif "document" in url_lower or ".doc" in url_lower:
+    u = url.lower()
+    if "presentation" in u or ".ppt" in u:
+        return "Deck/Presentation"
+    if "document" in u or ".doc" in u:
         return "Document"
-    elif "spreadsheets" in url_lower or ".xls" in url_lower:
+    if "spreadsheets" in u or ".xls" in u:
         return "Spreadsheet"
-    elif ".pdf" in url_lower:
+    if ".pdf" in u:
         return "PDF"
-    elif "drive.google.com" in url_lower:
-        return "Google Drive File"
-    else:
-        parsed = urlparse(url)
-        ext = Path(parsed.path).suffix.lower()
-        return ext.lstrip(".").upper() if ext else "Unknown"
+    if "drive.google.com" in u:
+        return "Drive File"
+    ext = Path(urlparse(url).path).suffix.lower().lstrip(".")
+    return ext.upper() if ext else "File"
 
 
-def make_export_url(url: str) -> tuple:
-    """Convert Google Docs/Slides/Sheets URL to a direct export URL."""
+def make_export_url(url: str):
+    """Return (download_url, extension) for Google file links."""
+    def fid(u):
+        m = re.search(r"/d/([a-zA-Z0-9_-]+)", u)
+        return m.group(1) if m else None
+
     if "docs.google.com/presentation" in url:
-        m = re.search(r"/d/([a-zA-Z0-9_-]+)", url)
-        if m:
-            return f"https://docs.google.com/presentation/d/{m.group(1)}/export/pptx", ".pptx"
-    elif "docs.google.com/document" in url:
-        m = re.search(r"/d/([a-zA-Z0-9_-]+)", url)
-        if m:
-            return f"https://docs.google.com/document/d/{m.group(1)}/export?format=docx", ".docx"
-    elif "docs.google.com/spreadsheets" in url:
-        m = re.search(r"/d/([a-zA-Z0-9_-]+)", url)
-        if m:
-            return f"https://docs.google.com/spreadsheets/d/{m.group(1)}/export?format=xlsx", ".xlsx"
-    elif "drive.google.com/file/d/" in url:
-        m = re.search(r"/file/d/([a-zA-Z0-9_-]+)", url)
-        if m:
-            return f"https://drive.google.com/uc?export=download&id={m.group(1)}", ""
-    elif "drive.google.com/open?id=" in url:
+        i = fid(url)
+        return (f"https://docs.google.com/presentation/d/{i}/export/pptx", ".pptx") if i else (url, "")
+    if "docs.google.com/document" in url:
+        i = fid(url)
+        return (f"https://docs.google.com/document/d/{i}/export?format=docx", ".docx") if i else (url, "")
+    if "docs.google.com/spreadsheets" in url:
+        i = fid(url)
+        return (f"https://docs.google.com/spreadsheets/d/{i}/export?format=xlsx", ".xlsx") if i else (url, "")
+    if "drive.google.com/file/d/" in url:
+        i = fid(url)
+        return (f"https://drive.google.com/uc?export=download&id={i}", "") if i else (url, "")
+    if "drive.google.com/open" in url:
         m = re.search(r"[?&]id=([a-zA-Z0-9_-]+)", url)
-        if m:
-            return f"https://drive.google.com/uc?export=download&id={m.group(1)}", ""
+        i = m.group(1) if m else None
+        return (f"https://drive.google.com/uc?export=download&id={i}", "") if i else (url, "")
     return url, ""
 
 
+def load_cookies(cookie_file: str = None) -> list:
+    """Load cookies from file, env var, or return empty."""
+    # Option A: env variable cookie string
+    cookie_str = os.environ.get("GOOGLE_COOKIES", "")
+    if cookie_str:
+        print("Using cookies from GOOGLE_COOKIES environment variable")
+        cookies = []
+        for part in cookie_str.split(";"):
+            part = part.strip()
+            if "=" in part:
+                name, _, value = part.partition("=")
+                cookies.append({"name": name.strip(), "value": value.strip(),
+                                 "domain": ".google.com", "path": "/"})
+        return cookies
+
+    # Option B: cookie file
+    path = Path(cookie_file) if cookie_file else Path(BASE_DIR / "cookies.json")
+    if path.exists():
+        print(f"Using cookies from: {path}")
+        data = json.loads(path.read_text())
+        if isinstance(data, list):
+            return [{"name": c["name"], "value": c["value"],
+                     "domain": c.get("domain", ".google.com"),
+                     "path": c.get("path", "/")} for c in data if "name" in c and "value" in c]
+        if isinstance(data, dict):
+            return [{"name": k, "value": v, "domain": ".google.com", "path": "/"}
+                    for k, v in data.items()]
+
+    return []
+
+
 async def download_file(url: str, filename: str, client: httpx.AsyncClient) -> dict:
-    result = {"downloaded": False, "local_path": "", "size": 0, "error": ""}
+    result = {"downloaded": False, "local_path": "", "size_kb": 0, "error": ""}
     try:
-        resp = await client.get(url, follow_redirects=True, timeout=30)
-        if resp.status_code == 200:
-            content_type = resp.headers.get("content-type", "")
+        r = await client.get(url, follow_redirects=True, timeout=40)
+        if r.status_code == 200:
+            ct = r.headers.get("content-type", "")
             if not Path(filename).suffix:
-                if "pdf" in content_type:
-                    filename += ".pdf"
-                elif "presentation" in content_type or "powerpoint" in content_type:
-                    filename += ".pptx"
-                elif "document" in content_type or "word" in content_type:
-                    filename += ".docx"
-                elif "spreadsheet" in content_type or "excel" in content_type:
-                    filename += ".xlsx"
+                if "pdf" in ct:               filename += ".pdf"
+                elif "powerpoint" in ct:      filename += ".pptx"
+                elif "word" in ct:            filename += ".docx"
+                elif "excel" in ct:           filename += ".xlsx"
+                elif "presentation" in ct:    filename += ".pptx"
+                elif "document" in ct:        filename += ".docx"
+                elif "spreadsheet" in ct:     filename += ".xlsx"
             filepath = FILES_DIR / filename
-            filepath.write_bytes(resp.content)
-            result["downloaded"] = True
-            result["local_path"] = str(filepath)
-            result["size"] = len(resp.content)
+            filepath.write_bytes(r.content)
+            result.update(downloaded=True, local_path=str(filepath), size_kb=round(len(r.content)/1024, 1))
+        elif r.status_code == 401:
+            result["error"] = "Auth required - provide valid cookies"
+        elif r.status_code == 403:
+            result["error"] = "Access denied (403) - file may need login"
         else:
-            result["error"] = f"HTTP {resp.status_code}"
+            result["error"] = f"HTTP {r.status_code}"
     except Exception as e:
-        result["error"] = str(e)
+        result["error"] = str(e)[:100]
     return result
 
 
-def load_cookies(cookie_file: str = None) -> list:
-    """Load cookies from file or MANUAL_COOKIES dict."""
-    cookies = []
-
-    if cookie_file and Path(cookie_file).exists():
-        print(f"Loading cookies from: {cookie_file}")
-        with open(cookie_file) as f:
-            data = json.load(f)
-        # Support various formats: list of dicts, or flat dict
-        if isinstance(data, list):
-            for c in data:
-                if "name" in c and "value" in c:
-                    cookies.append({
-                        "name": c["name"],
-                        "value": c["value"],
-                        "domain": c.get("domain", ".google.com"),
-                        "path": c.get("path", "/"),
-                    })
-        elif isinstance(data, dict):
-            for name, value in data.items():
-                cookies.append({
-                    "name": name,
-                    "value": value,
-                    "domain": ".google.com",
-                    "path": "/",
-                })
-    elif MANUAL_COOKIES:
-        print("Using manually configured cookies")
-        for name, value in MANUAL_COOKIES.items():
-            cookies.append({
-                "name": name,
-                "value": value,
-                "domain": ".google.com",
-                "path": "/",
-            })
-
-    return cookies
-
-
-async def scrape_google_site(url: str, cookies: list):
-    print(f"\nScraping: {url}")
-    print(f"Auth cookies loaded: {len(cookies)}")
-
-    all_links = []
-    page_texts = []
-    subpages = set()
+async def scrape_all(target_url: str, cookies: list):
+    all_files = []
+    all_pages = []
     visited = set()
+    to_visit = {target_url}
+
+    proxy_config = get_proxy_config()
 
     async with async_playwright() as p:
-        # Configure proxy bypass for google.com
-        http_proxy = os.environ.get("HTTP_PROXY") or os.environ.get("http_proxy") or ""
-        launch_proxy = None
-        if http_proxy:
-            launch_proxy = {
-                "server": http_proxy,
-                "bypass": "*.google.com,*.googleapis.com,*.gstatic.com,localhost,127.0.0.1"
-            }
-
-        browser = await p.firefox.launch(headless=True)
+        browser = await p.firefox.launch(headless=True, proxy=proxy_config)
         context = await browser.new_context(
             user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:120.0) Gecko/20100101 Firefox/120.0",
-            proxy=launch_proxy,
             ignore_https_errors=True,
         )
-
-        # Inject authentication cookies
         if cookies:
             await context.add_cookies(cookies)
-            print("Cookies injected into browser context")
+            print(f"Injected {len(cookies)} auth cookies")
 
-        async def scrape_page(page_url: str, depth: int = 0):
-            if page_url in visited or depth > 2:
+        async def visit(url: str):
+            if url in visited:
                 return
-            visited.add(page_url)
-
-            print(f"  {'  ' * depth}Loading: {page_url}")
+            visited.add(url)
+            print(f"  Scraping: {url}")
             page = await context.new_page()
-
             try:
-                await page.goto(page_url, wait_until="networkidle", timeout=45000)
-                await page.wait_for_timeout(3000)
+                await page.goto(url, wait_until="networkidle", timeout=45000)
+                await page.wait_for_timeout(2000)
 
-                # Check if redirected to login page
-                current_url = page.url
-                if "accounts.google.com" in current_url or "ServiceLogin" in current_url:
-                    print(f"  *** AUTHENTICATION REQUIRED - redirected to login page ***")
-                    print(f"  Please provide valid cookies. See instructions at top of script.")
-                    await page.close()
+                cur = page.url
+                if "accounts.google.com" in cur or "ServiceLogin" in cur:
+                    print("  !! Login page - cookies missing or expired")
                     return
 
-                # Scroll to load lazy content
-                await page.evaluate("window.scrollTo(0, document.body.scrollHeight)")
-                await page.wait_for_timeout(1500)
+                # Scroll to trigger lazy loads
+                for _ in range(3):
+                    await page.evaluate("window.scrollBy(0, window.innerHeight)")
+                    await page.wait_for_timeout(600)
                 await page.evaluate("window.scrollTo(0, 0)")
-                await page.wait_for_timeout(500)
 
                 title = await page.title()
-                print(f"    Title: {title}")
+                text = await page.inner_text("body")
 
-                # Extract body text
-                body_text = await page.inner_text("body")
+                all_pages.append({"url": url, "title": title, "text": text.strip()})
+                print(f"    Title: {title} | Text: {len(text)} chars")
 
-                page_texts.append({
-                    "url": page_url,
-                    "title": title,
-                    "text": body_text.strip()
-                })
+                # Extract links
+                links = await page.evaluate("""() => {
+                    return Array.from(document.querySelectorAll('a[href]')).map(a => ({
+                        href: a.href,
+                        text: (a.innerText || a.title || a.getAttribute('aria-label') || '').trim()
+                    }));
+                }""")
 
-                # Extract all links
-                links = await page.evaluate("""
-                    () => {
-                        const links = [];
-                        document.querySelectorAll('a[href]').forEach(a => {
-                            links.push({
-                                href: a.href,
-                                text: (a.innerText || a.title || a.getAttribute('aria-label') || '').trim()
-                            });
-                        });
-                        return links;
-                    }
-                """)
-
-                for link in links:
-                    href = link.get("href", "")
-                    link_text = link.get("text", "")
-
+                for lnk in links:
+                    href = lnk.get("href", "")
+                    ltext = lnk.get("text", "")
                     if not href or href.startswith("javascript:") or href.startswith("mailto:"):
                         continue
-
-                    if is_video_link(href):
+                    if is_video(href):
                         continue
-
-                    if is_google_file_link(href) or is_direct_file_link(href):
-                        file_type = get_file_type(href)
-                        entry = {
-                            "page_url": page_url,
-                            "link_text": link_text,
-                            "original_url": href,
-                            "file_type": file_type,
-                        }
-                        # Deduplicate by URL
-                        if not any(l["original_url"] == href for l in all_links):
-                            all_links.append(entry)
-                            print(f"    Found [{file_type}]: {link_text[:60]}")
-
-                    elif "sites.google.com/gokwik.co/salesportal" in href and href not in visited:
-                        subpages.add(href)
+                    if is_file_link(href):
+                        if not any(f["original_url"] == href for f in all_files):
+                            all_files.append({
+                                "page_url": url, "link_text": ltext,
+                                "original_url": href, "file_type": get_file_type(href),
+                            })
+                            print(f"    [FILE] {get_file_type(href)}: {ltext[:60]}")
+                    elif SITE_BASE in href and href not in visited:
+                        to_visit.add(href)
 
             except Exception as e:
-                print(f"  Error on {page_url}: {e}")
+                print(f"  Error: {e}")
             finally:
                 await page.close()
 
-        await scrape_page(url)
-
-        for subpage in list(subpages):
-            await scrape_page(subpage, depth=1)
+        # Crawl all discovered pages
+        while to_visit:
+            url = to_visit.pop()
+            await visit(url)
 
         await browser.close()
 
-    return all_links, page_texts
+    return all_files, all_pages
 
 
-async def main():
-    parser = argparse.ArgumentParser(description="Scrape Google Sites - Return Prime")
-    parser.add_argument("--cookie-file", help="Path to cookies JSON file", default="cookies.json")
-    args = parser.parse_args()
+async def download_all_files(all_files: list, cookies: list):
+    if not all_files:
+        return
 
-    print("=" * 60)
-    print("Google Sites Scraper - Return Prime")
-    print("=" * 60)
+    cookie_header = "; ".join(f"{c['name']}={c['value']}" for c in cookies)
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:120.0) Gecko/20100101 Firefox/120.0",
+        "Cookie": cookie_header,
+    }
 
-    cookies = load_cookies(args.cookie_file)
+    async with httpx.AsyncClient(headers=headers, follow_redirects=True, timeout=40,
+                                  verify=False) as client:
+        for i, f in enumerate(all_files):
+            safe = re.sub(r'[^\w\s-]', '', f["link_text"] or f"file_{i+1}")[:50].strip()
+            safe = re.sub(r'\s+', '_', safe) or f"file_{i+1}"
+            export_url, ext = make_export_url(f["original_url"])
+            filename = safe + ext
 
-    if not cookies:
-        print("\nWARNING: No authentication cookies provided!")
-        print("The site requires Google login. Trying without auth anyway...\n")
+            print(f"  Downloading: {f['link_text'][:50]} [{f['file_type']}]")
+            result = await download_file(export_url, filename, client)
+            f.update(result)
 
-    all_links, page_texts = await scrape_google_site(TARGET_URL, cookies)
+            if result["downloaded"]:
+                print(f"    Saved: {filename} ({result['size_kb']} KB)")
+            else:
+                print(f"    Failed: {result['error']}")
 
-    print(f"\nFound {len(all_links)} file links across {len(page_texts)} pages")
 
-    # Download files
-    if all_links:
-        print("\nAttempting to download files...")
-        cookie_header = "; ".join(f"{c['name']}={c['value']}" for c in cookies) if cookies else ""
-        headers = {
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:120.0) Gecko/20100101 Firefox/120.0"
-        }
-        if cookie_header:
-            headers["Cookie"] = cookie_header
-
-        async with httpx.AsyncClient(headers=headers, follow_redirects=True, timeout=30) as client:
-            for i, link in enumerate(all_links):
-                original_url = link["original_url"]
-                link_text = link["link_text"] or f"file_{i+1}"
-
-                safe_name = re.sub(r'[^\w\s-]', '', link_text)[:50].strip()
-                safe_name = re.sub(r'\s+', '_', safe_name) or f"file_{i+1}"
-
-                export_url, ext = make_export_url(original_url)
-                filename = safe_name + ext
-
-                print(f"  Downloading [{link['file_type']}]: {link_text[:50]}...")
-                dl_result = await download_file(export_url, filename, client)
-                link.update(dl_result)
-
-                if dl_result["downloaded"]:
-                    size_kb = dl_result["size"] / 1024
-                    print(f"    Saved: {filename} ({size_kb:.1f} KB)")
-                else:
-                    print(f"    Failed: {dl_result['error']}")
-
-    # Save text content
-    text_output_path = OUTPUT_DIR / "page_content.txt"
-    with open(text_output_path, "w", encoding="utf-8") as f:
-        f.write(f"Google Sites Scraper - Return Prime\n")
-        f.write(f"URL: {TARGET_URL}\n")
-        f.write(f"Pages scraped: {len(page_texts)}\n")
-        f.write("=" * 60 + "\n\n")
-        for pt in page_texts:
-            f.write(f"{'=' * 60}\n")
-            f.write(f"PAGE: {pt['title']}\n")
-            f.write(f"URL: {pt['url']}\n")
-            f.write(f"{'=' * 60}\n\n")
-            f.write(pt["text"])
+def save_outputs(all_files: list, all_pages: list):
+    # 1. page_content.txt
+    txt_path = OUTPUT_DIR / "page_content.txt"
+    with open(txt_path, "w", encoding="utf-8") as f:
+        f.write(f"Return Prime - GoKwik Sales Portal\n")
+        f.write(f"Source: {TARGET_URL}\n")
+        f.write(f"Pages scraped: {len(all_pages)}\n")
+        f.write("=" * 70 + "\n\n")
+        for p in all_pages:
+            f.write(f"{'=' * 70}\n")
+            f.write(f"PAGE: {p['title']}\n")
+            f.write(f"URL:  {p['url']}\n")
+            f.write(f"{'=' * 70}\n\n")
+            f.write(p["text"])
             f.write("\n\n")
 
-    # Save files summary CSV
+    # 2. files_summary.csv
     csv_path = OUTPUT_DIR / "files_summary.csv"
-    csv_fields = ["file_type", "link_text", "original_url", "downloaded", "local_path", "size", "error", "page_url"]
+    fields = ["file_type", "link_text", "original_url", "downloaded",
+              "local_path", "size_kb", "error", "page_url"]
     with open(csv_path, "w", newline="", encoding="utf-8-sig") as f:
-        writer = csv.DictWriter(f, fieldnames=csv_fields)
-        writer.writeheader()
-        for link in all_links:
-            writer.writerow({k: link.get(k, "") for k in csv_fields})
+        w = csv.DictWriter(f, fieldnames=fields)
+        w.writeheader()
+        for item in all_files:
+            w.writerow({k: item.get(k, "") for k in fields})
 
-    # Save JSON summary
+    # 3. files_summary.json
     json_path = OUTPUT_DIR / "files_summary.json"
     with open(json_path, "w", encoding="utf-8") as f:
         json.dump({
-            "target_url": TARGET_URL,
-            "pages_scraped": len(page_texts),
-            "files_found": len(all_links),
-            "files_downloaded": sum(1 for l in all_links if l.get("downloaded")),
-            "files": all_links,
-            "pages": [{"url": p["url"], "title": p["title"]} for p in page_texts]
+            "source": TARGET_URL,
+            "pages_scraped": len(all_pages),
+            "files_found": len(all_files),
+            "files_downloaded": sum(1 for x in all_files if x.get("downloaded")),
+            "pages": [{"url": p["url"], "title": p["title"]} for p in all_pages],
+            "files": all_files,
         }, f, indent=2, ensure_ascii=False)
 
-    # Print summary
-    print("\n" + "=" * 60)
-    print("SUMMARY")
-    print("=" * 60)
-    print(f"Pages scraped:      {len(page_texts)}")
-    print(f"Files found:        {len(all_links)}")
-    print(f"Files downloaded:   {sum(1 for l in all_links if l.get('downloaded'))}")
-    print(f"\nOutputs saved to: {OUTPUT_DIR}/")
-    print(f"  - page_content.txt   (all extracted text)")
-    print(f"  - files_summary.csv  (all file links + download status)")
-    print(f"  - files_summary.json (structured data)")
-    print(f"  - files/             (downloaded files)")
+    return txt_path, csv_path, json_path
 
-    if all_links:
-        print("\nFiles found:")
-        for link in all_links:
-            status = "DOWNLOADED" if link.get("downloaded") else f"FAILED ({link.get('error', 'N/A')})"
-            print(f"  [{link['file_type']}] {link['link_text'][:50]} - {status}")
+
+def create_zip(all_files: list, txt_path, csv_path, json_path) -> Path:
+    zip_path = BASE_DIR / "return_prime_complete.zip"
+    with zipfile.ZipFile(zip_path, "w", zipfile.ZIP_DEFLATED) as zf:
+        # Add summary files
+        zf.write(txt_path, "page_content.txt")
+        zf.write(csv_path, "files_summary.csv")
+        zf.write(json_path, "files_summary.json")
+
+        # Add downloaded files
+        for item in all_files:
+            if item.get("downloaded") and item.get("local_path"):
+                p = Path(item["local_path"])
+                if p.exists():
+                    zf.write(p, f"files/{p.name}")
+
+    return zip_path
+
+
+async def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--cookie-file", default="cookies.json")
+    args = parser.parse_args()
+
+    print("=" * 70)
+    print("Return Prime - GoKwik Sales Portal Scraper")
+    print("=" * 70)
+
+    cookies = load_cookies(args.cookie_file)
+    if not cookies:
+        print("\nNO AUTH COOKIES FOUND.")
+        print("The site requires Google login. Please provide cookies:")
+        print("  Option A: export GOOGLE_COOKIES='SID=xxx; SSID=yyy; ...'")
+        print("  Option B: place cookies.json in this directory")
+        print("\nSee script header for detailed instructions.")
+        print("\nContinuing anyway (will likely hit login redirect)...\n")
+
+    # --- Scrape ---
+    print("\n[1/4] Crawling pages...")
+    all_files, all_pages = await scrape_all(TARGET_URL, cookies)
+
+    print(f"\n  Done: {len(all_pages)} pages, {len(all_files)} files found")
+
+    # --- Download files ---
+    print("\n[2/4] Downloading files...")
+    await download_all_files(all_files, cookies)
+
+    # --- Save outputs ---
+    print("\n[3/4] Saving output files...")
+    txt_path, csv_path, json_path = save_outputs(all_files, all_pages)
+
+    # --- Create ZIP ---
+    print("\n[4/4] Creating ZIP bundle...")
+    zip_path = create_zip(all_files, txt_path, csv_path, json_path)
+
+    # --- Summary ---
+    print("\n" + "=" * 70)
+    print("COMPLETE")
+    print("=" * 70)
+    print(f"Pages scraped   : {len(all_pages)}")
+    print(f"Files found     : {len(all_files)}")
+    print(f"Files downloaded: {sum(1 for x in all_files if x.get('downloaded'))}")
+    print(f"\nDownloadable ZIP: {zip_path}")
+    print(f"ZIP size        : {zip_path.stat().st_size / 1024:.1f} KB")
+    print()
+
+    if all_files:
+        print("Files found:")
+        for f in all_files:
+            status = f"downloaded ({f.get('size_kb')} KB)" if f.get("downloaded") else f"failed: {f.get('error','')}"
+            print(f"  [{f['file_type']:20s}] {f['link_text'][:45]:45s} | {status}")
+    else:
+        print("No files found. Check page_content.txt for text content.")
+
+    print(f"\n=> Your single downloadable file: {zip_path.name}")
 
 
 if __name__ == "__main__":
