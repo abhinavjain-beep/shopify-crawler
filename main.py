@@ -3,6 +3,7 @@ import aiofiles
 import pandas as pd
 from pathlib import Path
 
+import httpx
 from scraper import Scraper
 
 BASE_DIR   = Path(__file__).resolve().parent
@@ -63,33 +64,43 @@ class Shopify:
 
     # ------------------------------------------------------- listing phase ---
 
+    async def _fetch_listing_page(self, page: int) -> bytes | None:
+        """Fetch one listing page with a brand-new HTTP client (no shared session state)."""
+        url = f"{self.DIRECTORY_URL}?sort=DEFAULT" + (f"&page={page}" if page > 1 else "")
+        try:
+            async with httpx.AsyncClient(follow_redirects=True, timeout=30) as client:
+                resp = await client.get(url, headers=self.HEADERS)
+                return resp.content
+        except Exception as e:
+            print(f"  Error fetching listing page {page}: {e}")
+            return None
+
     async def collect_all_listing_urls(self) -> list[str]:
         """
-        Phase 1 — use a FRESH scraper (clean session) to walk every listing page.
+        Phase 1 — fetch every listing page using a fresh HTTP client per request
+        (eliminates server-side session/cache issues that return stale pages).
 
         Stop conditions (whichever comes first):
-          1. Page returns 0 cards (past the real last page)
-          2. has_next button is disabled (last page signal)
-          3. Any URL on the current page was already seen this session
-             (cycle detected — the server loops back to earlier results)
+          1. Page returns 0 cards
+          2. has_next button is disabled
+          3. Cycle detected (any URL already seen this session)
         """
-        scraper = Scraper(requests_per_second=3)
+        from bs4 import BeautifulSoup
         all_urls: list[str] = []
         seen: set[str] = set()
         page = 1
         while True:
-            url = f"{self.DIRECTORY_URL}?sort=DEFAULT" + (f"&page={page}" if page > 1 else "")
-            soup = await scraper.get_soup(url, headers=self.HEADERS)
-            if not soup:
+            content = await self._fetch_listing_page(page)
+            if not content:
                 print(f"  Error on listing page {page}, stopping.")
                 break
+            soup = BeautifulSoup(content, "html.parser")
             cards = soup.select('[data-component-name="listing-profile-card"] a[href]')
             if not cards:
                 print(f"  No cards on page {page} — done collecting.")
                 break
             hrefs = [self.BASE_URL + a["href"] for a in cards]
 
-            # Cycle detection: if any URL already appeared earlier, we've looped
             if any(h in seen for h in hrefs):
                 print(f"  Cycle detected on page {page} — done collecting.")
                 break
@@ -103,7 +114,7 @@ class Shopify:
                 print(f"  Last page reached (has_next=False).")
                 break
             page += 1
-        await scraper.session.aclose()
+            await asyncio.sleep(0.5)   # polite delay between pages
         return all_urls
 
     # ------------------------------------------------------ profile phase ---
