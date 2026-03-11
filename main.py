@@ -66,11 +66,16 @@ class Shopify:
     async def collect_all_listing_urls(self) -> list[str]:
         """
         Phase 1 — use a FRESH scraper (clean session) to walk every listing page.
-        Stops as soon as a page returns 0 cards (beyond last page the button stays
-        enabled but the page is empty, so we stop on empty cards, not has_next).
+
+        Stop conditions (whichever comes first):
+          1. Page returns 0 cards (past the real last page)
+          2. has_next button is disabled (last page signal)
+          3. Any URL on the current page was already seen this session
+             (cycle detected — the server loops back to earlier results)
         """
         scraper = Scraper(requests_per_second=3)
         all_urls: list[str] = []
+        seen: set[str] = set()
         page = 1
         while True:
             url = f"{self.DIRECTORY_URL}?sort=DEFAULT" + (f"&page={page}" if page > 1 else "")
@@ -79,15 +84,23 @@ class Shopify:
                 print(f"  Error on listing page {page}, stopping.")
                 break
             cards = soup.select('[data-component-name="listing-profile-card"] a[href]')
-            if not cards:                         # past the last real page
+            if not cards:
                 print(f"  No cards on page {page} — done collecting.")
                 break
             hrefs = [self.BASE_URL + a["href"] for a in cards]
+
+            # Cycle detection: if any URL already appeared earlier, we've looped
+            if any(h in seen for h in hrefs):
+                print(f"  Cycle detected on page {page} — done collecting.")
+                break
+
+            seen.update(hrefs)
             all_urls.extend(hrefs)
-            next_btn  = soup.find(attrs={"data-component-name": "next-page"})
-            has_next  = next_btn is not None and next_btn.get("aria-disabled") != "true"
+            next_btn = soup.find(attrs={"data-component-name": "next-page"})
+            has_next = next_btn is not None and next_btn.get("aria-disabled") != "true"
             print(f"  Listing page {page}: {len(cards)} cards | total so far: {len(all_urls)}")
             if not has_next:
+                print(f"  Last page reached (has_next=False).")
                 break
             page += 1
         await scraper.session.aclose()
