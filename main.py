@@ -81,47 +81,33 @@ class Shopify:
             return None
 
         LinkedIn = ""
-        Instagram = ""
-        Facebook = ""
-        Twitter = ""
-        Youtube = ""
 
         title = soup.select_one("h1.richtext.text-t4")
-        description = soup.select_one("section[data-section-name='description']")
-        phone = soup.select_one("a[href*='tel:']")
         email = soup.select_one("a[href*='mailto:']")
-        website = soup.select_one("div.flex.flex-wrap.gap-x-2.items-center a[rel='nofollow']")
         location = soup.select_one("div.flex.flex-col.gap-y-1:-soup-contains('Primary location') p:nth-child(2)")
-        languages = soup.select_one("div.flex.flex-col.gap-y-1:-soup-contains('Languages') p:nth-child(2)")
+
+        # Partner tier badge: <title id="*-badge-title">Select tier</title>
+        tier_title = soup.select_one("title[id$='-badge-title']")
+        partner_plan = tier_title.get_text(strip=True).replace(" tier", "").title() if tier_title else ""
+
+        # Country: last part of location string (e.g. "Gretna, United States" → "United States")
+        location_text = location.get_text(strip=True) if location else ""
+        country = location_text.split(",")[-1].strip() if location_text else ""
 
         socials = soup.select("div.flex.flex-col.gap-y-1:-soup-contains('Social links') a")
         for social in socials:
             href = social.get('href', '')
             if "linkedin.com" in href:
                 LinkedIn = href
-            elif "instagram" in href:
-                Instagram = href
-            elif "facebook" in href:
-                Facebook = href
-            elif "twitter" in href or "x.com" in href:
-                Twitter = href
-            elif "youtube" in href:
-                Youtube = href
 
         data = {
-            "Name": title.get_text(strip=True) if title else "",
-            "Description": description.get_text(strip=True) if description else "",
-            "Phone Number": phone.get('href').replace('tel:', '') if phone else "",
-            "Website": website.get('href') if website else "",
+            "Agency Name": title.get_text(strip=True) if title else "",
+            "Shopify Tier": partner_plan,
+            "Country": country,
+            "Location": location_text,
             "Email": email.get('href').replace('mailto:', '') if email else "",
-            "Location": location.get_text(strip=True) if location else "",
-            "Languages": languages.get_text(strip=True) if languages else "",
             "LinkedIn": LinkedIn,
-            "Instagram": Instagram,
-            "Facebook": Facebook,
-            "Twitter": Twitter,
-            "Youtube": Youtube,
-            "URL": url,
+            "Shopify Page": url,
         }
 
         await self.store_url(url)
@@ -200,11 +186,11 @@ class Shopify:
             global_seen.update(added)
             all_urls.extend(added)
             no_loc_new += len(added)
-            if not has_next:
+            if not has_next or not cards:
                 break
             page += 1
             await asyncio.sleep(0.4)
-        print(f"  No-location sweep: {no_loc_new} additional agencies found")
+        print(f"  No-location sweep: {no_loc_new} additional agencies found (swept {page} pages)")
 
         print(f"\nPhase 1 complete: {len(all_urls)} unique agency URLs collected.\n")
 
