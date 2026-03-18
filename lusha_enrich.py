@@ -5,11 +5,12 @@ Fills in: Agency LinkedIn, Founder Email, Founder LinkedIn, POC info.
 """
 
 import csv
+import os
 import time
 import requests
 from urllib.parse import urlparse
 
-API_KEY = "932d750e-bed1-4b7b-8084-7cfe3444342c"
+API_KEY = os.environ.get("LUSHA_API_KEY", "")
 BASE_URL = "https://api.lusha.com"
 INPUT_FILE = "woo_data.csv"
 OUTPUT_FILE = "woo_data_enriched.csv"
