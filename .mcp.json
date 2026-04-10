@@ -1,34 +1,16 @@
 {
   "mcpServers": {
-    "salesforce-hosted": {
-      "command": "npx",
-      "args": [
-        "-y",
-        "mcp-remote",
-        "https://api.salesforce.com/platform/mcp/v1-beta.2/sobject-all",
-        "8080",
-        "--static-oauth-client-info",
-        "{\"client_id\":\"${SF_CLIENT_ID}\",\"client_secret\":\"${SF_CLIENT_SECRET}\"}"
-      ],
-      "env": {
-        "SF_CLIENT_ID": "",
-        "SF_CLIENT_SECRET": ""
-      }
+    "salesforce-sobject-all": {
+      "type": "http",
+      "url": "https://api.salesforce.com/platform/mcp/v1/platform/sobject-all"
+    },
+    "salesforce-sobject-reads": {
+      "type": "http",
+      "url": "https://api.salesforce.com/platform/mcp/v1/platform/sobject-reads"
     },
     "salesforce-actions": {
-      "command": "npx",
-      "args": [
-        "-y",
-        "mcp-remote",
-        "https://api.salesforce.com/platform/mcp/v1-beta.2/invocable_actions",
-        "8081",
-        "--static-oauth-client-info",
-        "{\"client_id\":\"${SF_CLIENT_ID}\",\"client_secret\":\"${SF_CLIENT_SECRET}\"}"
-      ],
-      "env": {
-        "SF_CLIENT_ID": "",
-        "SF_CLIENT_SECRET": ""
-      }
+      "type": "http",
+      "url": "https://api.salesforce.com/platform/mcp/v1/platform/invocable-actions"
     }
   }
 }
