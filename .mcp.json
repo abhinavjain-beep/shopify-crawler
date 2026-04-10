@@ -8,9 +8,9 @@
       "type": "http",
       "url": "https://api.salesforce.com/platform/mcp/v1/platform/sobject-reads"
     },
-    "salesforce-actions": {
+    "salesforce-sobject-mutations": {
       "type": "http",
-      "url": "https://api.salesforce.com/platform/mcp/v1/platform/invocable-actions"
+      "url": "https://api.salesforce.com/platform/mcp/v1/platform/sobject-mutations"
     }
   }
 }
