@@ -348,6 +348,18 @@ notebooklm_mcp/
 claude_desktop_config.example.json   # Claude Desktop config template
 ```
 
+## 📈 Mutual Fund Dashboard
+
+This repo also includes a self-hosted Streamlit dashboard for analysing
+Indian mutual fund portfolios with live NAVs from AMFI. See
+[`mutual_fund_dashboard/README.md`](mutual_fund_dashboard/README.md) for
+details. Quick start:
+
+```bash
+pip install -r mutual_fund_dashboard/requirements.txt
+streamlit run mutual_fund_dashboard/app.py
+```
+
 ## 🙏 Acknowledgments
 
 - Shopify for providing the Partners Directory

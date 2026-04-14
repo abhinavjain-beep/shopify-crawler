@@ -1,0 +1,6 @@
+streamlit>=1.32
+mftool>=2.8
+casparser>=0.7
+pyxirr>=0.10
+plotly>=5.20
+# pandas and httpx are already pinned in the root requirements.txt
